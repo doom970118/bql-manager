@@ -1,0 +1,37 @@
+# Paquetes y artefactos generados
+dist/
+*.zip
+
+# Cachés de pruebas y Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Configuración local de editores
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*~
+
+# Archivos temporales y registros
+*.bak
+*.tmp
+*.temp
+*.log
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Carpetas del cliente de World of Warcraft que no pertenecen al addon
+Cache/
+Errors/
+Logs/
+Screenshots/
+WTF/
+
+# SavedVariables exportadas accidentalmente
+BQLManagerDB.lua
+BQLManagerDB.lua.bak
