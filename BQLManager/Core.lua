@@ -390,7 +390,26 @@ function Addon:GetFirstBiteTarget()
     return firstBite and firstBite.edge.target or nil
 end
 
-function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion)
+function Addon:IsCooldownUserAssignedElsewhere(group, index, field, slot)
+    if not slot or slot == "" then
+        return false
+    end
+
+    local records = self.db and self.db.cooldowns and self.db.cooldowns[group]
+    if not records then
+        return false
+    end
+
+    index = tonumber(index)
+    for otherIndex, record in ipairs(records) do
+        if otherIndex ~= index and record[field] == slot then
+            return true
+        end
+    end
+    return false
+end
+
+function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion, ignoreUniqueness)
     if not self:IsSlotActive(slot) then
         return false
     end
@@ -405,6 +424,10 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
     end
 
     if (group == "threat" and field ~= "source") or (group ~= "threat" and field ~= "slot") then
+        return false
+    end
+
+    if ignoreUniqueness ~= true and self:IsCooldownUserAssignedElsewhere(group, index, field, slot) then
         return false
     end
 
@@ -1180,16 +1203,33 @@ function Addon:GetValidationIssues()
         end
     end
 
+    local cooldownGroupNames = {
+        aura = "Aura Mastery",
+        flight1 = "Primer vuelo",
+        flight2 = "Segundo vuelo",
+        threat = "MD/Tricks",
+    }
     for group, records in pairs(self.db.cooldowns) do
+        local assignedUsers = {}
         for index, record in ipairs(records) do
+            local userField = group == "threat" and "source" or "slot"
+            local userSlot = record[userField]
+            if userSlot and userSlot ~= "" then
+                if assignedUsers[userSlot] then
+                    AddIssue(self:GetSlotLabel(userSlot) .. " está asignado más de una vez en " .. (cooldownGroupNames[group] or tostring(group)) .. ".")
+                else
+                    assignedUsers[userSlot] = true
+                end
+            end
+
             if group == "threat" then
-                if not self:IsCooldownSlotEligible(group, index, "source", record.source, false) then
+                if not self:IsCooldownSlotEligible(group, index, "source", record.source, false, true) then
                     AddIssue(self:GetSlotLabel(record.source) .. " no puede lanzar " .. tostring(record.label) .. ".")
                 end
-                if not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
+                if not self:IsCooldownSlotEligible(group, index, "target", record.target, false, true) then
                     AddIssue("Destino inválido para " .. tostring(record.label) .. ": debe ser un tanque o la primera mordida.")
                 end
-            elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
+            elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false, true) then
                 AddIssue(self:GetSlotLabel(record.slot) .. " no puede usar " .. tostring(record.label) .. ".")
             end
         end

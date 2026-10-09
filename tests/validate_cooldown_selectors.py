@@ -44,6 +44,14 @@ def main() -> None:
         assert rule in eligibility
     assert 'role == "TANK" or slot == self:GetFirstBiteTarget()' in eligibility
     assert 'role == "MDPS" or role == "RDPS"' in eligibility
+    assert "ignoreUniqueness ~= true" in eligibility
+    assert "self:IsCooldownUserAssignedElsewhere(group, index, field, slot)" in eligibility
+
+    uniqueness = CORE.split("function Addon:IsCooldownUserAssignedElsewhere", 1)[1].split(
+        "function Addon:IsCooldownSlotEligible", 1
+    )[0]
+    assert "otherIndex ~= index" in uniqueness
+    assert "record[field] == slot" in uniqueness
 
     setter = CORE.split("function Addon:SetCooldownAssignment", 1)[1].split(
         "function Addon:SetRosterValue", 1
@@ -52,6 +60,25 @@ def main() -> None:
     assert setter.index("self:SetBiteTarget(firstBite.index, slot)") < setter.index("record[field] = slot")
     assert "function Addon:GetFirstBiteTarget" in CORE
     assert '"target", record.target, false' in CORE
+    assert 'local userField = group == "threat" and "source" or "slot"' in CORE
+    assert "cooldownGroupNames" in CORE
+
+    def available(records: list[str], row: int, slot: str) -> bool:
+        return all(other_row == row or assigned != slot for other_row, assigned in enumerate(records))
+
+    aura = ["MDPS3", "MDPS4", "HEALER1", "HEALER2"]
+    assert available(aura, 0, "MDPS3")
+    assert not available(aura, 1, "MDPS3")
+
+    flight1 = ["TANK2", "HEALER3", "HEALER4", "RDPS9", "MDPS8"]
+    flight2 = ["HEALER1", "RDPS9", "HEALER4", "HEALER3", "RDPS5"]
+    assert available(flight1, 2, "HEALER4")
+    assert available(flight2, 2, "HEALER4")
+
+    threat_sources = ["RDPS7", "RDPS8", "MDPS1", "MDPS2"]
+    assert not available(threat_sources, 1, "RDPS7")
+    threat_targets = ["TANK1", "TANK1", "RDPS1", "TANK1"]
+    assert threat_targets.count("TANK1") == 3
 
     bite_setter = CORE.split("function Addon:SetBiteTarget", 1)[1].split(
         "function Addon:FormatWave", 1
@@ -70,7 +97,7 @@ def main() -> None:
     assert targets[0] == promoted
     assert len(targets) == len(set(targets)) == 16
 
-    print("Cooldown selectors, class/spec filters, and first-bite target promotion passed.")
+    print("Cooldown selectors, unique users, class/spec filters, and first-bite target promotion passed.")
 
 
 if __name__ == "__main__":
