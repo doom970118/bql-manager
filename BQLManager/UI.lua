@@ -471,7 +471,8 @@ function UI:CreateMainFrame()
         Addon.db.window.x or 0,
         Addon.db.window.y or 0
     )
-    frame:SetFrameStrata("DIALOG")
+    frame:SetFrameStrata("MEDIUM")
+    frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -491,7 +492,11 @@ function UI:CreateMainFrame()
         Addon.db.window.x = x
         Addon.db.window.y = y
     end)
-    frame:SetScript("OnShow", function()
+    frame:SetScript("OnMouseDown", function(self)
+        self:Raise()
+    end)
+    frame:SetScript("OnShow", function(self)
+        self:Raise()
         UI:Refresh()
     end)
 
@@ -823,7 +828,11 @@ function UI:CreateZonesPanel(parent)
     self.mapMarkers = {}
 
     CreateSectionTitle(panel, "Mapa de zonas según color", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "/range 8 · Haz clic en una posición para elegir o intercambiar su puesto.", "TOPLEFT", panel, "TOPLEFT", 255, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "/range 8 · Clic para asignar o intercambiar posiciones.", "TOPLEFT", panel, "TOPLEFT", 245, -12)
+    help:SetWidth(275)
+    help:SetHeight(24)
+    help:SetJustifyH("LEFT")
+    help:SetJustifyV("TOP")
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local map = CreateFrame("Frame", nil, panel)
