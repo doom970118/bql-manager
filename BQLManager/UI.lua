@@ -183,16 +183,40 @@ function UI:SetSpecSelectorValue(selector, specId)
     end
 end
 
-local function MoveClassMenuArrow(level)
+local function GetLatestDropDownButton(level)
     local list = _G["DropDownList" .. tostring(level)]
     if not list or not list.numButtons then
-        return
+        return nil, nil, nil
     end
 
     local buttonName = "DropDownList" .. tostring(level) .. "Button" .. tostring(list.numButtons)
     local button = _G[buttonName]
     local arrow = _G[buttonName .. "ExpandArrow"] or (button and button.expandArrow)
     local icon = _G[buttonName .. "Icon"] or (button and button.icon)
+    return button, arrow, icon
+end
+
+local function ResetDropDownButtonLayout(level)
+    local button, arrow, icon = GetLatestDropDownButton(level)
+    if not button then
+        return
+    end
+
+    if arrow then
+        arrow:ClearAllPoints()
+        arrow:SetPoint("RIGHT", button, "RIGHT", -5, 0)
+    end
+    if icon then
+        icon:ClearAllPoints()
+        icon:SetPoint("RIGHT", button, "RIGHT", -5, 0)
+        icon:SetWidth(16)
+        icon:SetHeight(16)
+        icon:SetTexCoord(0, 1, 0, 1)
+    end
+end
+
+local function MoveClassMenuArrow(level)
+    local button, arrow, icon = GetLatestDropDownButton(level)
     if not button or not arrow or not icon then
         return
     end
@@ -260,6 +284,7 @@ local function CreateSpecSelector(parent, slot)
                             CloseDropDownMenus()
                         end
                         UIDropDownMenu_AddButton(info, level)
+                        ResetDropDownButtonLayout(level)
                     end
                 end
             end
@@ -348,6 +373,7 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
                         CloseDropDownMenus()
                     end
                     UIDropDownMenu_AddButton(info, level)
+                    ResetDropDownButtonLayout(level)
                 end
             end
         end, "MENU")
@@ -893,6 +919,7 @@ function UI:CreateZonesPanel(parent)
                             CloseDropDownMenus()
                         end
                         UIDropDownMenu_AddButton(info, level)
+                        ResetDropDownButtonLayout(level)
                     end
                 end
             end, "MENU")
