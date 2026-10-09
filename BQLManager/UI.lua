@@ -44,12 +44,7 @@ local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS or {
     DEATHKNIGHT = { 0.25, 0.49609375, 0.5, 0.75 },
 }
 
-local function GetSlotRoleColor(slot)
-    if slot == "BOSS" then
-        return COLORS.boss
-    end
-
-    local role = Addon:GetSlotRole(slot)
+local function GetRoleColor(role)
     if role == "MDPS" then
         return COLORS.melee
     elseif role == "RDPS" then
@@ -58,6 +53,13 @@ local function GetSlotRoleColor(slot)
         return COLORS.healers
     end
     return COLORS.neutral
+end
+
+local function GetSlotRoleColor(slot)
+    if slot == "BOSS" then
+        return COLORS.boss
+    end
+    return GetRoleColor(Addon:GetSlotRole(slot))
 end
 
 -- Mapa G1:Z14 de la hoja de referencia. Los números conservan las zonas
@@ -795,7 +797,7 @@ function UI:CreateZonesPanel(parent)
     self.mapMarkers = {}
 
     CreateSectionTitle(panel, "Mapa de zonas según color", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "/range 8 · Pasa el ratón por un jugador para ver su puesto.", "TOPLEFT", panel, "TOPLEFT", 255, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "/range 8 · Haz clic en una posición para elegir o intercambiar su puesto.", "TOPLEFT", panel, "TOPLEFT", 255, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local map = CreateFrame("Frame", nil, panel)
@@ -837,7 +839,7 @@ function UI:CreateZonesPanel(parent)
     end
 
     for _, definition in ipairs(ZONE_MARKERS) do
-        local marker = CreateFrame("Frame", nil, map)
+        local marker = CreateFrame("Button", NextName("ZoneMarker"), map)
         marker:SetWidth((definition.span * cellWidth) - 2)
         marker:SetHeight(cellHeight - 2)
         marker:SetPoint(
@@ -848,7 +850,7 @@ function UI:CreateZonesPanel(parent)
             -3 - ((definition.row - 1) * cellHeight)
         )
         marker:SetFrameLevel(map:GetFrameLevel() + 5)
-        local color = GetSlotRoleColor(definition.slot)
+        local color = definition.slot == "BOSS" and COLORS.boss or GetRoleColor(Addon.ZONE_POSITION_ROLES[definition.slot])
         marker:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -862,22 +864,62 @@ function UI:CreateZonesPanel(parent)
         marker.label = CreateText(marker, "GameFontHighlightSmall", "", "CENTER", marker, "CENTER", 0, 0)
         marker.label:SetWidth((definition.span * cellWidth) - 8)
         marker.label:SetJustifyH("CENTER")
-        marker.slot = definition.slot
+        marker.zoneId = definition.slot
+        marker.role = Addon.ZONE_POSITION_ROLES[definition.slot]
         marker.maxChars = definition.span == 2 and 8 or 12
         marker:EnableMouse(true)
-        local currentSlot = definition.slot
+        local currentZoneId = definition.slot
+        local zoneRole = marker.role
+
+        if currentZoneId ~= "BOSS" then
+            marker:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+            marker.menu = CreateFrame("Frame", NextName("ZoneMenu"), marker, "UIDropDownMenuTemplate")
+            UIDropDownMenu_Initialize(marker.menu, function(_, level)
+                if level ~= 1 then
+                    return
+                end
+                for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
+                    if Addon:GetSlotRole(slot) == zoneRole then
+                        local currentSlot = slot
+                        local record = Addon:GetSlotRecord(slot)
+                        local spec = record and Addon:GetSpecDefinition(record.spec)
+                        local info = UIDropDownMenu_CreateInfo()
+                        info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
+                        info.value = slot
+                        info.notCheckable = true
+                        info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                        info.func = function()
+                            Addon:SetZoneAssignment(currentZoneId, currentSlot)
+                            CloseDropDownMenus()
+                        end
+                        UIDropDownMenu_AddButton(info, level)
+                    end
+                end
+            end, "MENU")
+            marker:SetScript("OnClick", function(self)
+                ToggleDropDownMenu(1, nil, self.menu, self, 0, 0)
+            end)
+        end
+
         marker:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(currentSlot == "BOSS" and "BQL" or Addon:GetSlotLabel(currentSlot))
-            if currentSlot ~= "BOSS" then
-                GameTooltip:AddLine(Addon:GetSlotName(currentSlot), 1, 1, 1)
+            if currentZoneId == "BOSS" then
+                GameTooltip:SetText("BQL")
+            else
+                GameTooltip:SetText("Zona " .. tostring(zoneRole))
+                if self.assignedSlot then
+                    GameTooltip:AddLine(Addon:GetSlotLabel(self.assignedSlot) .. " · " .. Addon:GetSlotName(self.assignedSlot), 1, 1, 1)
+                else
+                    GameTooltip:AddLine("Sin puesto asignado", 1, 0.35, 0.35)
+                end
+                GameTooltip:AddLine("Haz clic para seleccionar un puesto " .. tostring(zoneRole) .. ".", 0.75, 0.75, 0.75, true)
             end
             GameTooltip:Show()
         end)
         marker:SetScript("OnLeave", function()
             GameTooltip:Hide()
         end)
-        self.mapMarkers[definition.slot] = marker
+        self.mapMarkers[currentZoneId] = marker
     end
 
     local footer = CreateText(panel, "GameFontDisableSmall", "La forma y las posiciones reproducen el bloque G1:Z14 del Excel.", "TOPLEFT", panel, "TOPLEFT", 20, -349)
@@ -885,6 +927,7 @@ function UI:CreateZonesPanel(parent)
 
     CreateSectionTitle(panel, "Leyenda", 540, -12)
     local legend = {
+        { label = "Tanks", color = COLORS.neutral },
         { label = "MDPS", color = COLORS.melee },
         { label = "RDPS", color = COLORS.ranged },
         { label = "Healers", color = COLORS.healers },
@@ -895,10 +938,10 @@ function UI:CreateZonesPanel(parent)
         local swatch = CreateFrame("Frame", nil, panel)
         swatch:SetWidth(14)
         swatch:SetHeight(14)
-        swatch:SetPoint("TOPLEFT", panel, "TOPLEFT", 542, -39 - ((index - 1) * 20))
+        swatch:SetPoint("TOPLEFT", panel, "TOPLEFT", 542, -39 - ((index - 1) * 17))
         swatch:SetBackdrop({ bgFile = "Interface\\ChatFrame\\ChatFrameBackground" })
         swatch:SetBackdropColor(item.color[1], item.color[2], item.color[3], 0.90)
-        CreateText(panel, "GameFontHighlightSmall", item.label, "TOPLEFT", panel, "TOPLEFT", 563, -39 - ((index - 1) * 20))
+        CreateText(panel, "GameFontHighlightSmall", item.label, "TOPLEFT", panel, "TOPLEFT", 563, -39 - ((index - 1) * 17))
     end
 
     CreateSectionTitle(panel, "Recordatorios", 540, -143)
@@ -1125,19 +1168,17 @@ function UI:RefreshZones()
     for key, input in pairs(self.zoneInputs) do
         SetInputText(input, Addon.db.zones[key])
     end
-    for slot, marker in pairs(self.mapMarkers) do
-        if slot == "BOSS" or Addon:IsSlotActive(slot) then
-            marker:Show()
-            local name = slot == "BOSS" and "BQL" or Addon:GetSlotName(slot)
-            if string.len(name) > marker.maxChars then
-                name = string.sub(name, 1, marker.maxChars - 1) .. "."
-            end
-            marker.label:SetText(name)
-            local color = GetSlotRoleColor(slot)
-            marker:SetBackdropBorderColor(color[1], color[2], color[3], 1)
-        else
-            marker:Hide()
+    for zoneId, marker in pairs(self.mapMarkers) do
+        local slot = zoneId == "BOSS" and "BOSS" or Addon:GetZoneAssignment(zoneId)
+        marker.assignedSlot = slot
+        marker:Show()
+        local name = slot == "BOSS" and "BQL" or (slot and Addon:GetSlotName(slot) or "Sin asignar")
+        if string.len(name) > marker.maxChars then
+            name = string.sub(name, 1, marker.maxChars - 1) .. "."
         end
+        marker.label:SetText(name)
+        local color = zoneId == "BOSS" and COLORS.boss or GetRoleColor(marker.role)
+        marker:SetBackdropBorderColor(color[1], color[2], color[3], 1)
     end
 end
 

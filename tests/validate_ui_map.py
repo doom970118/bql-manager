@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADDON_ROOT = ROOT / "BQLManager" if (ROOT / "BQLManager").is_dir() else ROOT
 UI_SOURCE = (ADDON_ROOT / "UI.lua").read_text(encoding="utf-8")
 DEFAULTS = (ADDON_ROOT / "Defaults.lua").read_text(encoding="utf-8")
+CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 
 
 def main() -> None:
@@ -41,7 +42,17 @@ def main() -> None:
         assert 1 <= column_number <= 20, f"{slot} has an invalid column"
         assert column_number + span_number - 1 <= 20, f"{slot} extends outside the map"
 
-    print("Zone map geometry and 25-player marker coverage passed.")
+    zones_panel = UI_SOURCE.split("function UI:CreateZonesPanel", 1)[1].split(
+        "function UI:ShowTab", 1
+    )[0]
+    assert 'CreateFrame("Button", NextName("ZoneMarker"), map)' in zones_panel
+    assert "Addon:GetSlotRole(slot) == zoneRole" in zones_panel
+    assert 'info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)' in zones_panel
+    assert "Addon:SetZoneAssignment(currentZoneId, currentSlot)" in zones_panel
+    assert "function Addon:SetZoneAssignment" in CORE
+    assert "function Addon:GetZoneAssignment" in CORE
+
+    print("Zone map geometry, role-filtered selectors, and marker coverage passed.")
 
 
 if __name__ == "__main__":

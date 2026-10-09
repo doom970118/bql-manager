@@ -205,6 +205,39 @@ function Addon:NormalizeRosterRole(value, slot)
     return self.ROLE_SET[role] and role or nil
 end
 
+function Addon:PrepareZoneAssignments()
+    if not self.db then
+        return
+    end
+    if type(self.db.zoneAssignments) ~= "table" then
+        self.db.zoneAssignments = {}
+    end
+
+    local used = {}
+    for _, zoneId in ipairs(self.SLOT_ORDER) do
+        local role = self.ZONE_POSITION_ROLES[zoneId]
+        local slot = self.db.zoneAssignments[zoneId]
+        if self:IsSlotActive(slot) and self:GetSlotRole(slot) == role and not used[slot] then
+            used[slot] = true
+        else
+            self.db.zoneAssignments[zoneId] = ""
+        end
+    end
+
+    for _, zoneId in ipairs(self.SLOT_ORDER) do
+        if self.db.zoneAssignments[zoneId] == "" then
+            local role = self.ZONE_POSITION_ROLES[zoneId]
+            for _, slot in ipairs(self:GetActiveSlotOrder()) do
+                if self:GetSlotRole(slot) == role and not used[slot] then
+                    self.db.zoneAssignments[zoneId] = slot
+                    used[slot] = true
+                    break
+                end
+            end
+        end
+    end
+end
+
 function Addon:PrepareRoster()
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
@@ -217,6 +250,7 @@ function Addon:PrepareRoster()
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     end
 
+    self:PrepareZoneAssignments()
     self:RebuildBiteSources()
 end
 
@@ -293,6 +327,39 @@ function Addon:GetSlotDisplay(slot)
     return self:GetSlotLabel(slot) .. " · " .. self:GetSlotName(slot)
 end
 
+function Addon:GetZoneAssignment(zoneId)
+    if not self.ZONE_POSITION_ROLES[zoneId] or not self.db or not self.db.zoneAssignments then
+        return nil
+    end
+    local slot = self.db.zoneAssignments[zoneId]
+    if self:IsSlotActive(slot) and self:GetSlotRole(slot) == self.ZONE_POSITION_ROLES[zoneId] then
+        return slot
+    end
+    return nil
+end
+
+function Addon:SetZoneAssignment(zoneId, slot)
+    local role = self.ZONE_POSITION_ROLES[zoneId]
+    if not role or not self:IsSlotActive(slot) or self:GetSlotRole(slot) ~= role then
+        return false
+    end
+
+    local oldSlot = self:GetZoneAssignment(zoneId)
+    if oldSlot == slot then
+        return true
+    end
+
+    for _, otherZoneId in ipairs(self.SLOT_ORDER) do
+        if otherZoneId ~= zoneId and self.db.zoneAssignments[otherZoneId] == slot then
+            self.db.zoneAssignments[otherZoneId] = oldSlot or ""
+            break
+        end
+    end
+    self.db.zoneAssignments[zoneId] = slot
+    self:RefreshUI()
+    return true
+end
+
 function Addon:SetRosterValue(slot, field, value)
     if not self.SLOT_SET[slot] then
         return
@@ -364,6 +431,7 @@ function Addon:AddRosterRole(role)
                 record.name = self:GetSlotLabel(slot)
             end
             self:Print("Puesto " .. self:GetSlotLabel(slot) .. " añadido. Selecciona una especialización compatible.")
+            self:PrepareZoneAssignments()
             self:RefreshUI()
             return true
         end
@@ -409,6 +477,7 @@ function Addon:RemoveRosterRole(role)
         record.name = slot
     end
     self:Print(oldLabel .. " retirado. Su posición queda disponible para otro rol.")
+    self:PrepareZoneAssignments()
     self:RefreshUI()
     return true
 end
@@ -1022,6 +1091,23 @@ function Addon:GetValidationIssues()
         end
     end
 
+    local positioned = {}
+    for _, zoneId in ipairs(self.SLOT_ORDER) do
+        local slot = self.db.zoneAssignments and self.db.zoneAssignments[zoneId] or ""
+        local role = self.ZONE_POSITION_ROLES[zoneId]
+        if slot ~= "" then
+            if not self:IsSlotActive(slot) then
+                AddIssue("Puesto inválido en la zona " .. zoneId .. ": " .. tostring(slot) .. ".")
+            elseif self:GetSlotRole(slot) ~= role then
+                AddIssue(self:GetSlotLabel(slot) .. " no corresponde a una zona " .. role .. ".")
+            elseif positioned[slot] then
+                AddIssue(self:GetSlotLabel(slot) .. " aparece en dos posiciones del mapa.")
+            else
+                positioned[slot] = zoneId
+            end
+        end
+    end
+
     return issues
 end
 
@@ -1189,6 +1275,9 @@ function Addon:SyncConfiguration()
     for key, note in pairs(self.db.zones) do
         self:QueueSync({ "ZONE", key, note }, channel)
     end
+    for _, zoneId in ipairs(self.SLOT_ORDER) do
+        self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel)
+    end
     self:QueueSync({ "END" }, channel)
     self:Print("Sincronización encolada para la banda.")
 end
@@ -1216,6 +1305,7 @@ function Addon:ReceiveSync(message, sender)
             self:Print("Configuración recibida de " .. tostring(sender) .. ".")
             self.receivingSync = nil
             self.receivingSyncVersion = nil
+            self:PrepareZoneAssignments()
             self:RebuildBiteSources()
             self:RefreshUI()
         end
@@ -1253,6 +1343,8 @@ function Addon:ReceiveSync(message, sender)
         end
     elseif kind == "ZONE" and self.db.zones[fields[2]] ~= nil then
         self.db.zones[fields[2]] = fields[3] or ""
+    elseif kind == "ZPOS" and self.ZONE_POSITION_ROLES[fields[2]] then
+        self.db.zoneAssignments[fields[2]] = fields[3] or ""
     elseif kind == "STATE" then
         self.state.active = tonumber(fields[2]) == 1
         self.state.currentWave = tonumber(fields[3]) or 1

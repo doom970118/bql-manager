@@ -2,8 +2,8 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.6.0"
-Addon.DB_VERSION = 3
+Addon.VERSION = "1.7.0"
+Addon.DB_VERSION = 4
 Addon.MESSAGE_PREFIX = "BQLM1"
 
 Addon.SLOT_ORDER = {
@@ -16,6 +16,13 @@ Addon.SLOT_ORDER = {
 Addon.SLOT_SET = {}
 for _, slot in ipairs(Addon.SLOT_ORDER) do
     Addon.SLOT_SET[slot] = true
+end
+
+Addon.ZONE_POSITION_ROLES = {}
+Addon.DEFAULT_ZONE_ASSIGNMENTS = {}
+for _, slot in ipairs(Addon.SLOT_ORDER) do
+    Addon.ZONE_POSITION_ROLES[slot] = string.match(slot, "^([A-Z]+)")
+    Addon.DEFAULT_ZONE_ASSIGNMENTS[slot] = slot
 end
 
 Addon.ROLE_ORDER = { "TANK", "MDPS", "RDPS", "HEALER" }
@@ -261,4 +268,5 @@ Addon.DEFAULTS = {
         HEALERS = "Repartidos entre los ranged para cubrir toda la sala.",
         FLAMES = "Con Sombras enjambradoras, salir por el borde y dejar el fuego fuera.",
     },
+    zoneAssignments = Addon.DEFAULT_ZONE_ASSIGNMENTS,
 }

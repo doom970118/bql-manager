@@ -13,7 +13,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
 - Asignaciones de Aura Mastery, primer y segundo vuelo, MD y Tricks.
-- Mapa visual de posiciones reconstruido desde el Excel, con nombres dinámicos y zonas por color.
+- Mapa visual reconstruido desde el Excel, con posiciones seleccionables por rol, intercambio automático y nombres dinámicos.
 - Notas tácticas de posiciones, rango y Sombras enjambradoras.
 - Importación de la banda actual sin destruir asignaciones válidas.
 - Sincronización de configuración entre líder/asistentes que tengan el addon.
@@ -49,5 +49,7 @@ La cabecera de `Plantilla` permite quitar (`-`) y añadir (`+`) puestos por func
 En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los orígenes de las rondas siguientes se recalculan automáticamente. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
 
 Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
+
+En `Zonas`, haz clic sobre una posición del mapa para elegir un puesto compatible. Las zonas de tanque solo muestran tanques, las melee solo MDPS, las ranged solo RDPS y las de sanación solo healers. El menú muestra `puesto · jugador`; si el puesto ya estaba colocado en otra posición, ambos se intercambian. El mapa guarda y sincroniza esta distribución.
 
 Los anuncios a `RAID_WARNING` requieren ser líder o asistente. Si no lo eres, el addon usa el canal de banda normal.
