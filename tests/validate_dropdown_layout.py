@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +17,8 @@ def main() -> None:
     assert "icon:SetTexCoord(0, 1, 0, 1)" in helpers
     assert "local function MoveClassMenuArrow" in helpers
 
-    standard_resets = UI.count("ResetDropDownButtonLayout(level)") - 1
+    reset_calls = re.findall(r"ResetDropDownButtonLayout\(level(?:, iconCoords)?\)", UI)
+    standard_resets = len(reset_calls) - 1
     assert standard_resets == 3, f"Expected three standard menu resets, found {standard_resets}"
 
     spec_selector = UI.split("local function CreateSpecSelector", 1)[1].split(
@@ -29,12 +31,12 @@ def main() -> None:
     roster_selector = UI.split("local function CreateRosterSlotSelector", 1)[1].split(
         "local function CreateNoteInput", 1
     )[0]
-    assert "UIDropDownMenu_AddButton(info, level)\n                    ResetDropDownButtonLayout(level)" in roster_selector
+    assert "UIDropDownMenu_AddButton(info, level)\n                    ResetDropDownButtonLayout(level, iconCoords)" in roster_selector
 
     zone_selector = UI.split('NextName("ZoneMenu")', 1)[1].split(
         'marker:SetScript("OnClick"', 1
     )[0]
-    assert "UIDropDownMenu_AddButton(info, level)\n                        ResetDropDownButtonLayout(level)" in zone_selector
+    assert "UIDropDownMenu_AddButton(info, level)\n                        ResetDropDownButtonLayout(level, iconCoords)" in zone_selector
 
     print("Reusable dropdown buttons reset icon anchors and texture coordinates correctly.")
 

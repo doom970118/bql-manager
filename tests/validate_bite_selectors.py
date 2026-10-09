@@ -22,7 +22,7 @@ def main() -> None:
     assert "function UI:SetRosterSlotSelectorValue" in UI
     assert "Addon:GetActiveSlotOrder()" in UI
     assert 'info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)' in UI
-    assert "info.icon = spec and spec.icon" in UI
+    assert "iconCoords = SetDropDownRoleIcon(info, Addon:GetSlotRole(slot))" in UI
     assert "if not slotFilter or slotFilter(slot)" in UI
 
     bite_panel = UI.split("function UI:CreateBitesPanel", 1)[1].split("function UI:CreateCooldownPanel", 1)[0]

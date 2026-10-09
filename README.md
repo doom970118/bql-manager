@@ -5,7 +5,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 ## Funciones
 
 - Plantilla editable de 25 puestos: 2 tanques, 8 melee, 10 ranged y 5 healers.
-- Selector buscable de miembros de hermandad y del grupo/banda actual, incluidos los miembros offline de la hermandad, con icono de clase y perfiles persistentes de clase/spec.
+- Selector buscable de miembros de hermandad y del grupo/banda actual, incluidos los miembros offline de la hermandad, con icono de clase, icono de rol para datos aún desconocidos y perfiles persistentes de clase/spec.
 - Selector con iconos para las 30 especializaciones de WotLK, filtradas según el puesto TANK, MDPS, RDPS o HEALER.
 - Composición flexible con controles para quitar y añadir funciones, máximo dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.

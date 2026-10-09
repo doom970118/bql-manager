@@ -44,6 +44,29 @@ local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS or {
     DEATHKNIGHT = { 0.25, 0.49609375, 0.5, 0.75 },
 }
 
+local ROLE_ICON_TEXTURE = "Interface\\LFGFrame\\LFGRole"
+local ROLE_ICON_TCOORDS = {
+    TANK = { 0.5, 0.75, 0, 1 },
+    MDPS = { 0.25, 0.5, 0, 1 },
+    RDPS = { 0.25, 0.5, 0, 1 },
+    HEALER = { 0.75, 1, 0, 1 },
+}
+
+local function SetRoleIcon(texture, role, alpha)
+    local coords = ROLE_ICON_TCOORDS[role] or ROLE_ICON_TCOORDS.RDPS
+    texture:SetTexture(ROLE_ICON_TEXTURE)
+    texture:SetTexCoord(unpack(coords))
+    texture:SetVertexColor(1, 1, 1, 1)
+    texture:SetAlpha(alpha or 1)
+end
+
+local function SetDropDownRoleIcon(info, role)
+    local coords = ROLE_ICON_TCOORDS[role] or ROLE_ICON_TCOORDS.RDPS
+    info.icon = ROLE_ICON_TEXTURE
+    info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
+    return coords
+end
+
 local function GetRoleColor(role)
     if role == "MDPS" then
         return COLORS.melee
@@ -187,10 +210,9 @@ function UI:SetGuildMemberSelectorValue(selector, name)
         selector.classIcon:SetTexture(CLASS_ICON_TEXTURE)
         selector.classIcon:SetTexCoord(unpack(coords))
         selector.classIcon:SetVertexColor(1, 1, 1, 1)
+        selector.classIcon:SetAlpha(1)
     else
-        selector.classIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-        selector.classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        selector.classIcon:SetVertexColor(0.65, 0.65, 0.70, 1)
+        SetRoleIcon(selector.classIcon, Addon:GetSlotRole(selector.slot))
     end
 end
 
@@ -222,6 +244,7 @@ function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
             else
                 button.icon:SetTexCoord(0, 1, 0, 1)
             end
+            button.icon:SetVertexColor(1, 1, 1, 1)
             button.icon:SetAlpha(member.online and 1 or 0.55)
             button.label:SetText(member.name)
             local color = _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[member.classKey]
@@ -232,9 +255,7 @@ function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
             end
             button:Show()
         elseif rowIndex == 1 and #candidates == 0 then
-            button.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-            button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            button.icon:SetAlpha(0.6)
+            SetRoleIcon(button.icon, Addon:GetSlotRole(selector.slot), 0.6)
             button.label:SetText("Sin coincidencias compatibles")
             button.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
             button:Show()
@@ -451,14 +472,15 @@ function UI:SetSpecSelectorValue(selector, specId)
     selector.selectedSpecId = spec and spec.id or nil
 
     if not spec then
-        selector.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-        selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        SetRoleIcon(selector.icon, Addon:GetSlotRole(selector.slot))
         selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
         return
     end
 
     selector.icon:SetTexture(spec.icon)
     selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    selector.icon:SetVertexColor(1, 1, 1, 1)
+    selector.icon:SetAlpha(1)
     local color = _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[spec.classKey]
     if color then
         selector:SetBackdropBorderColor(color.r, color.g, color.b, 1)
@@ -480,7 +502,7 @@ local function GetLatestDropDownButton(level)
     return button, arrow, icon
 end
 
-local function ResetDropDownButtonLayout(level)
+local function ResetDropDownButtonLayout(level, iconCoords)
     local button, arrow, icon = GetLatestDropDownButton(level)
     if not button then
         return
@@ -495,7 +517,11 @@ local function ResetDropDownButtonLayout(level)
         icon:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         icon:SetWidth(16)
         icon:SetHeight(16)
-        icon:SetTexCoord(0, 1, 0, 1)
+        if iconCoords then
+            icon:SetTexCoord(unpack(iconCoords))
+        else
+            icon:SetTexCoord(0, 1, 0, 1)
+        end
     end
 end
 
@@ -513,6 +539,7 @@ end
 
 local function CreateSpecSelector(parent, slot)
     local selector = CreateFrame("Button", NextName("SpecSelector"), parent)
+    selector.slot = slot
     selector:SetWidth(24)
     selector:SetHeight(24)
     SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
@@ -648,16 +675,21 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
                     local record = Addon:GetSlotRecord(slot)
                     local spec = record and Addon:GetSpecDefinition(record.spec)
                     local info = UIDropDownMenu_CreateInfo()
+                    local iconCoords
                     info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
                     info.value = slot
                     info.notCheckable = true
-                    info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                    if spec then
+                        info.icon = spec.icon
+                    else
+                        iconCoords = SetDropDownRoleIcon(info, Addon:GetSlotRole(slot))
+                    end
                     info.func = function()
                         callback(currentSlot)
                         CloseDropDownMenus()
                     end
                     UIDropDownMenu_AddButton(info, level)
-                    ResetDropDownButtonLayout(level)
+                    ResetDropDownButtonLayout(level, iconCoords)
                 end
             end
         end, "MENU")
@@ -1222,16 +1254,21 @@ function UI:CreateZonesPanel(parent)
                         local record = Addon:GetSlotRecord(slot)
                         local spec = record and Addon:GetSpecDefinition(record.spec)
                         local info = UIDropDownMenu_CreateInfo()
+                        local iconCoords
                         info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
                         info.value = slot
                         info.notCheckable = true
-                        info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                        if spec then
+                            info.icon = spec.icon
+                        else
+                            iconCoords = SetDropDownRoleIcon(info, Addon:GetSlotRole(slot))
+                        end
                         info.func = function()
                             Addon:SetZoneAssignment(currentZoneId, currentSlot)
                             CloseDropDownMenus()
                         end
                         UIDropDownMenu_AddButton(info, level)
-                        ResetDropDownButtonLayout(level)
+                        ResetDropDownButtonLayout(level, iconCoords)
                     end
                 end
             end, "MENU")
