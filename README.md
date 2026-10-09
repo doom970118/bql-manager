@@ -17,7 +17,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Mapa visual reconstruido desde el Excel, con posiciones seleccionables por rol, intercambio automático y nombres dinámicos.
 - Notas tácticas de posiciones, rango y Sombras enjambradoras.
 - Importación de la banda actual sin destruir asignaciones válidas.
-- Sincronización manual o automática de la configuración desde el líder/asistentes hacia la banda.
+- Sincronización manual o automática desde el líder de grupo o el líder/asistentes de banda hacia los demás jugadores.
 - Bloqueo de toda la configuración mientras el encuentro está activo, hasta que Lana'thel muera o se pulse `Detener`.
 - Validador de puestos vacíos, jugadores duplicados y conflictos en el árbol.
 

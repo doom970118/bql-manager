@@ -1969,6 +1969,19 @@ function Addon:IsAuthorizedSender(sender)
             return (member.rank or 0) >= 1
         end
     end
+
+    local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
+    for index = 1, partyCount do
+        local unit = "party" .. tostring(index)
+        local name = UnitName and UnitName(unit) or ""
+        if self:NormalizeName(name) == normalized then
+            if UnitIsPartyLeader then
+                return UnitIsPartyLeader(unit) and true or false
+            end
+            local leaderIndex = GetPartyLeaderIndex and GetPartyLeaderIndex() or nil
+            return leaderIndex == index
+        end
+    end
     return false
 end
 
@@ -2030,14 +2043,14 @@ function Addon:SyncConfiguration(silent)
     end
     self:QueueSync({ "END" }, channel, category)
     if not silent then
-        self:Print("Sincronización encolada para la banda.")
+        self:Print("Sincronización encolada para el grupo.")
     end
     return true
 end
 
 function Addon:BroadcastState()
     local channel = self:GetAddonChannel()
-    if not channel or not self:CanLeadRaid() then
+    if not channel or not self:CanSynchronizeConfiguration() then
         return
     end
     self:QueueSync({ "STATE", self.state.active and 1 or 0, self.state.currentWave }, channel)
