@@ -11,13 +11,13 @@ TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
 def main() -> None:
-    assert 'Addon.VERSION = "1.4.0"' in DEFAULTS
+    assert 'Addon.VERSION = "1.5.0"' in DEFAULTS
     assert "Addon.DB_VERSION = 3" in DEFAULTS
     assert 'Addon.ROLE_ORDER = { "TANK", "MDPS", "RDPS", "HEALER" }' in DEFAULTS
     assert "Addon.ROLE_MINIMUMS = { HEALER = 1 }" in DEFAULTS
     assert "Addon.ROLE_MAXIMUMS = { TANK = 2 }" in DEFAULTS
     assert "Addon.MAX_ROSTER_SIZE = 25" in DEFAULTS
-    assert "## Version: 1.4.0" in TOC
+    assert "## Version: 1.5.0" in TOC
 
     slot_block = DEFAULTS.split("Addon.SLOT_ORDER = {", 1)[1].split("}", 1)[0]
     slots = re.findall(r'"([A-Z]+\d+)"', slot_block)
@@ -60,8 +60,8 @@ def main() -> None:
     assert "Addon:GetActiveSlotOrder()" in UI
     assert "row.slot:SetText(Addon:GetSlotLabel(slot))" in UI
     assert "Addon:ResolveSlotLabel(box:GetText(), false)" in UI
-    assert 'Addon:SetBiteSlot(currentIndex, "source", slot)' in UI
     assert 'Addon:SetBiteSlot(currentIndex, "target", slot)' in UI
+    assert "Addon:IsBiteTargetAvailable(currentIndex, slot)" in UI
     assert "Addon:IsSlotActive(slot)" in UI
 
     print("Flexible roster roles, limits, labels, synchronization, and map integration passed.")

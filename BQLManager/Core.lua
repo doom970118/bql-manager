@@ -216,9 +216,7 @@ function Addon:PrepareRoster()
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     end
 
-    if self.db.bites and self.db.bites[1] then
-        self.db.bites[1].source = "BOSS"
-    end
+    self:RebuildBiteSources()
 end
 
 function Addon:InitializeDatabase()
@@ -423,18 +421,13 @@ function Addon:SetBiteSlot(index, field, slot)
         return false
     end
 
-    if index == 1 and field == "source" then
-        self.db.bites[index].source = "BOSS"
+    if field == "source" then
+        self:RebuildBiteSources()
         self:RefreshUI()
-        return slot == "BOSS"
-    end
-    if not self:IsSlotActive(slot) then
-        return false
+        return self.db.bites[index].source == slot
     end
 
-    self.db.bites[index][field] = slot
-    self:RefreshUI()
-    return true
+    return self:SetBiteTarget(index, slot)
 end
 
 function Addon:GetWaveEdges(wave)
@@ -449,6 +442,77 @@ function Addon:GetWaveEdges(wave)
         end
     end
     return result
+end
+
+function Addon:RebuildBiteSources()
+    if not self.db or not self.db.bites then
+        return
+    end
+
+    local infected = {}
+    local infectedOrder = {}
+    for wave = 1, 5 do
+        local edges = self:GetWaveEdges(wave)
+        for position, item in ipairs(edges) do
+            if wave == 1 then
+                item.edge.source = "BOSS"
+            else
+                item.edge.source = infectedOrder[position] or ""
+            end
+        end
+
+        for _, item in ipairs(edges) do
+            local target = item.edge.target
+            if self:IsSlotActive(target) and not infected[target] then
+                infected[target] = true
+                tinsert(infectedOrder, target)
+            end
+        end
+    end
+end
+
+function Addon:IsBiteTargetAvailable(index, slot)
+    index = tonumber(index)
+    local edge = index and self.db and self.db.bites and self.db.bites[index]
+    if not edge or not self:IsSlotActive(slot) then
+        return false
+    end
+
+    local selectedWave = tonumber(edge.wave)
+    if not selectedWave then
+        return false
+    end
+
+    for otherIndex, otherEdge in ipairs(self.db.bites) do
+        local otherWave = tonumber(otherEdge.wave)
+        if otherIndex ~= index and otherWave and otherWave < selectedWave and otherEdge.target == slot then
+            return false
+        end
+    end
+    return true
+end
+
+function Addon:SetBiteTarget(index, slot)
+    index = tonumber(index)
+    if not self:IsBiteTargetAvailable(index, slot) then
+        return false
+    end
+
+    local edge = self.db.bites[index]
+    local oldTarget = edge.target
+    if oldTarget ~= slot then
+        for otherIndex, otherEdge in ipairs(self.db.bites) do
+            if otherIndex ~= index and otherEdge.target == slot then
+                otherEdge.target = oldTarget
+                break
+            end
+        end
+        edge.target = slot
+    end
+
+    self:RebuildBiteSources()
+    self:RefreshUI()
+    return true
 end
 
 function Addon:FormatWave(wave, includeSlots)
@@ -850,6 +914,7 @@ function Addon:GetValidationIssues()
     end
 
     local infected = {}
+    local infectedOrder = {}
     local expectedByWave = { 1, 1, 2, 4, 8 }
     for wave = 1, 5 do
         local edges = self:GetWaveEdges(wave)
@@ -859,13 +924,18 @@ function Addon:GetValidationIssues()
 
         local sources = {}
         local newTargets = {}
-        for _, item in ipairs(edges) do
+        local newTargetOrder = {}
+        for position, item in ipairs(edges) do
             local edge = item.edge
             if wave == 1 then
                 if edge.source ~= "BOSS" then
                     AddIssue("La primera mordida debe salir de BOSS.")
                 end
             else
+                local expectedSource = infectedOrder[position]
+                if edge.source ~= expectedSource then
+                    AddIssue("El origen de la fila " .. item.index .. " debe ser " .. tostring(expectedSource) .. " según el orden automático.")
+                end
                 if not self:IsSlotActive(edge.source) then
                     AddIssue("Origen de mordida inválido: " .. tostring(edge.source) .. ".")
                 elseif not infected[edge.source] then
@@ -885,13 +955,16 @@ function Addon:GetValidationIssues()
                 end
                 if newTargets[edge.target] then
                     AddIssue(edge.target .. " recibe dos mordidas en la ronda " .. wave .. ".")
+                elseif not infected[edge.target] then
+                    tinsert(newTargetOrder, edge.target)
                 end
                 newTargets[edge.target] = true
             end
         end
 
-        for target in pairs(newTargets) do
+        for _, target in ipairs(newTargetOrder) do
             infected[target] = true
+            tinsert(infectedOrder, target)
         end
     end
 
@@ -1104,6 +1177,7 @@ function Addon:ReceiveSync(message, sender)
             self:Print("Configuración recibida de " .. tostring(sender) .. ".")
             self.receivingSync = nil
             self.receivingSyncVersion = nil
+            self:RebuildBiteSources()
             self:RefreshUI()
         end
     elseif kind == "ROSTER" and self.SLOT_SET[fields[2]] then
@@ -1121,11 +1195,6 @@ function Addon:ReceiveSync(message, sender)
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
             self.db.bites[index].wave = tonumber(fields[3]) or self.db.bites[index].wave
-            if index == 1 then
-                self.db.bites[index].source = "BOSS"
-            elseif self:IsSlotActive(fields[4]) then
-                self.db.bites[index].source = fields[4]
-            end
             if self:IsSlotActive(fields[5]) then
                 self.db.bites[index].target = fields[5]
             end

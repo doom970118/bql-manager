@@ -308,7 +308,7 @@ function UI:SetRosterSlotSelectorValue(selector, slot)
     end
 end
 
-local function CreateRosterSlotSelector(parent, width, callback, lockedValue)
+local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter)
     local selector = CreateFrame("Button", NextName("SlotSelector"), parent)
     selector:SetWidth(width or 94)
     selector:SetHeight(20)
@@ -332,19 +332,21 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue)
                 return
             end
             for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
-                local currentSlot = slot
-                local record = Addon:GetSlotRecord(slot)
-                local spec = record and Addon:GetSpecDefinition(record.spec)
-                local info = UIDropDownMenu_CreateInfo()
-                info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
-                info.value = slot
-                info.notCheckable = true
-                info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
-                info.func = function()
-                    callback(currentSlot)
-                    CloseDropDownMenus()
+                if not slotFilter or slotFilter(slot) then
+                    local currentSlot = slot
+                    local record = Addon:GetSlotRecord(slot)
+                    local spec = record and Addon:GetSpecDefinition(record.spec)
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
+                    info.value = slot
+                    info.notCheckable = true
+                    info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                    info.func = function()
+                        callback(currentSlot)
+                        CloseDropDownMenus()
+                    end
+                    UIDropDownMenu_AddButton(info, level)
                 end
-                UIDropDownMenu_AddButton(info, level)
             end
         end, "MENU")
         selector:SetScript("OnClick", function(self)
@@ -360,6 +362,9 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue)
         elseif Addon:IsSlotActive(self.value) then
             GameTooltip:SetText(Addon:GetSlotLabel(self.value))
             GameTooltip:AddLine(Addon:GetSlotName(self.value), 1, 1, 1)
+            if self.locked then
+                GameTooltip:AddLine("Origen calculado automáticamente.", 0.75, 0.75, 0.75)
+            end
         else
             GameTooltip:SetText("Seleccionar puesto")
         end
@@ -668,7 +673,7 @@ function UI:CreateBitesPanel(parent)
     self.biteRows = {}
 
     CreateSectionTitle(panel, "Árbol editable de mordidas", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Selecciona puestos activos. El origen de la primera mordida es BOSS y está bloqueado.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Elige destinos; los orígenes se calculan y bloquean automáticamente. BOSS siempre inicia el árbol.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     CreateText(panel, "GameFontNormalSmall", "Ronda", "TOPLEFT", panel, "TOPLEFT", 18, -48)
@@ -684,15 +689,16 @@ function UI:CreateBitesPanel(parent)
         row.state = CreateText(panel, "GameFontHighlightSmall", "-", "TOPLEFT", panel, "TOPLEFT", 18, y)
         row.wave = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 43, y)
         row.wave:SetWidth(30)
-        row.source = CreateRosterSlotSelector(panel, 94, function(slot)
-            Addon:SetBiteSlot(currentIndex, "source", slot)
-        end, index == 1 and "BOSS" or nil)
+        local edge = Addon.db.bites[index]
+        row.source = CreateRosterSlotSelector(panel, 94, nil, edge and edge.source or "")
         row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", 78, y + 4)
         row.sourceName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 190, y)
         row.sourceName:SetWidth(180)
         row.sourceName:SetJustifyH("LEFT")
         row.target = CreateRosterSlotSelector(panel, 94, function(slot)
             Addon:SetBiteSlot(currentIndex, "target", slot)
+        end, nil, function(slot)
+            return Addon:IsBiteTargetAvailable(currentIndex, slot)
         end)
         row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", 386, y + 4)
         row.targetName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 500, y)
@@ -1074,7 +1080,7 @@ function UI:RefreshBites()
         local edge = Addon.db.bites[index]
         if edge then
             row.wave:SetText(tostring(edge.wave))
-            self:SetRosterSlotSelectorValue(row.source, index == 1 and "BOSS" or edge.source)
+            self:SetRosterSlotSelectorValue(row.source, edge.source)
             self:SetRosterSlotSelectorValue(row.target, edge.target)
             row.sourceName:SetText(Addon:GetSlotName(edge.source))
             row.targetName:SetText(Addon:GetSlotName(edge.target))
