@@ -803,7 +803,8 @@ function UI:CreateMainFrame()
     self.lockCheck = CreateCheck(frame, "Bloquear ventana", function(button)
         Addon.db.options.locked = button:GetChecked() and true or false
     end)
-    self.lockCheck:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -48, -42)
+    local lockLabelWidth = self.lockCheck.label:GetStringWidth()
+    self.lockCheck:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -(lockLabelWidth + 54), -42)
 
     self.tabs = {}
     self.panels = {}

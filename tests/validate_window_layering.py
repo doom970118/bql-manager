@@ -16,6 +16,9 @@ def main() -> None:
     assert 'frame:SetScript("OnMouseDown"' in main_frame
     assert 'frame:SetScript("OnShow"' in main_frame
     assert main_frame.count("self:Raise()") == 2
+    assert "self.lockCheck.label:GetStringWidth()" in main_frame
+    assert 'self.lockCheck:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -(lockLabelWidth + 54), -42)' in main_frame
+    assert 'self.lockCheck:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -48, -42)' not in main_frame
 
     zones_panel = UI.split("function UI:CreateZonesPanel", 1)[1].split(
         "function UI:ShowTab", 1
