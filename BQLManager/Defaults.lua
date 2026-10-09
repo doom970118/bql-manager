@@ -27,81 +27,81 @@ Addon.CLASSES = {
     DEATHKNIGHT = {
         name = "Caballero de la Muerte",
         specs = {
-            { id = "DEATHKNIGHT_BLOOD", name = "Sangre", icon = "Interface\\Icons\\Spell_Deathknight_BloodPresence" },
-            { id = "DEATHKNIGHT_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence" },
-            { id = "DEATHKNIGHT_UNHOLY", name = "Profano", icon = "Interface\\Icons\\Spell_Deathknight_UnholyPresence" },
+            { id = "DEATHKNIGHT_BLOOD", name = "Sangre", icon = "Interface\\Icons\\Spell_Deathknight_BloodPresence", roles = { TANK = true } },
+            { id = "DEATHKNIGHT_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence", roles = { MDPS = true } },
+            { id = "DEATHKNIGHT_UNHOLY", name = "Profano", icon = "Interface\\Icons\\Spell_Deathknight_UnholyPresence", roles = { MDPS = true } },
         },
     },
     DRUID = {
         name = "Druida",
         specs = {
-            { id = "DRUID_BALANCE", name = "Equilibrio", icon = "Interface\\Icons\\Spell_Nature_StarFall" },
-            { id = "DRUID_FERAL", name = "Combate feral", icon = "Interface\\Icons\\Ability_Druid_CatForm" },
-            { id = "DRUID_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_HealingTouch" },
+            { id = "DRUID_BALANCE", name = "Equilibrio", icon = "Interface\\Icons\\Spell_Nature_StarFall", roles = { RDPS = true } },
+            { id = "DRUID_FERAL", name = "Combate feral", icon = "Interface\\Icons\\Ability_Druid_CatForm", roles = { TANK = true, MDPS = true } },
+            { id = "DRUID_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_HealingTouch", roles = { HEALER = true } },
         },
     },
     HUNTER = {
         name = "Cazador",
         specs = {
-            { id = "HUNTER_BEASTMASTERY", name = "Dominio de bestias", icon = "Interface\\Icons\\Ability_Hunter_BeastTaming" },
-            { id = "HUNTER_MARKSMANSHIP", name = "Puntería", icon = "Interface\\Icons\\Ability_Marksmanship" },
-            { id = "HUNTER_SURVIVAL", name = "Supervivencia", icon = "Interface\\Icons\\Ability_Hunter_SwiftStrike" },
+            { id = "HUNTER_BEASTMASTERY", name = "Dominio de bestias", icon = "Interface\\Icons\\Ability_Hunter_BeastTaming", roles = { RDPS = true } },
+            { id = "HUNTER_MARKSMANSHIP", name = "Puntería", icon = "Interface\\Icons\\Ability_Marksmanship", roles = { RDPS = true } },
+            { id = "HUNTER_SURVIVAL", name = "Supervivencia", icon = "Interface\\Icons\\Ability_Hunter_SwiftStrike", roles = { RDPS = true } },
         },
     },
     MAGE = {
         name = "Mago",
         specs = {
-            { id = "MAGE_ARCANE", name = "Arcano", icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
-            { id = "MAGE_FIRE", name = "Fuego", icon = "Interface\\Icons\\Spell_Fire_FireBolt02" },
-            { id = "MAGE_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02" },
+            { id = "MAGE_ARCANE", name = "Arcano", icon = "Interface\\Icons\\Spell_Holy_MagicalSentry", roles = { RDPS = true } },
+            { id = "MAGE_FIRE", name = "Fuego", icon = "Interface\\Icons\\Spell_Fire_FireBolt02", roles = { RDPS = true } },
+            { id = "MAGE_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02", roles = { RDPS = true } },
         },
     },
     PALADIN = {
         name = "Paladín",
         specs = {
-            { id = "PALADIN_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt" },
-            { id = "PALADIN_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Spell_Holy_DevotionAura" },
-            { id = "PALADIN_RETRIBUTION", name = "Reprensión", icon = "Interface\\Icons\\Spell_Holy_AuraOfLight" },
+            { id = "PALADIN_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt", roles = { HEALER = true } },
+            { id = "PALADIN_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Spell_Holy_DevotionAura", roles = { TANK = true } },
+            { id = "PALADIN_RETRIBUTION", name = "Reprensión", icon = "Interface\\Icons\\Spell_Holy_AuraOfLight", roles = { MDPS = true } },
         },
     },
     PRIEST = {
         name = "Sacerdote",
         specs = {
-            { id = "PRIEST_DISCIPLINE", name = "Disciplina", icon = "Interface\\Icons\\Spell_Holy_PowerWordShield" },
-            { id = "PRIEST_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt" },
-            { id = "PRIEST_SHADOW", name = "Sombras", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain" },
+            { id = "PRIEST_DISCIPLINE", name = "Disciplina", icon = "Interface\\Icons\\Spell_Holy_PowerWordShield", roles = { HEALER = true } },
+            { id = "PRIEST_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt", roles = { HEALER = true } },
+            { id = "PRIEST_SHADOW", name = "Sombras", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain", roles = { RDPS = true } },
         },
     },
     ROGUE = {
         name = "Pícaro",
         specs = {
-            { id = "ROGUE_ASSASSINATION", name = "Asesinato", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate" },
-            { id = "ROGUE_COMBAT", name = "Combate", icon = "Interface\\Icons\\Ability_BackStab" },
-            { id = "ROGUE_SUBTLETY", name = "Sutileza", icon = "Interface\\Icons\\Ability_Stealth" },
+            { id = "ROGUE_ASSASSINATION", name = "Asesinato", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate", roles = { MDPS = true } },
+            { id = "ROGUE_COMBAT", name = "Combate", icon = "Interface\\Icons\\Ability_BackStab", roles = { MDPS = true } },
+            { id = "ROGUE_SUBTLETY", name = "Sutileza", icon = "Interface\\Icons\\Ability_Stealth", roles = { MDPS = true } },
         },
     },
     SHAMAN = {
         name = "Chamán",
         specs = {
-            { id = "SHAMAN_ELEMENTAL", name = "Elemental", icon = "Interface\\Icons\\Spell_Nature_Lightning" },
-            { id = "SHAMAN_ENHANCEMENT", name = "Mejora", icon = "Interface\\Icons\\Spell_Nature_LightningShield" },
-            { id = "SHAMAN_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_MagicImmunity" },
+            { id = "SHAMAN_ELEMENTAL", name = "Elemental", icon = "Interface\\Icons\\Spell_Nature_Lightning", roles = { RDPS = true } },
+            { id = "SHAMAN_ENHANCEMENT", name = "Mejora", icon = "Interface\\Icons\\Spell_Nature_LightningShield", roles = { MDPS = true } },
+            { id = "SHAMAN_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_MagicImmunity", roles = { HEALER = true } },
         },
     },
     WARLOCK = {
         name = "Brujo",
         specs = {
-            { id = "WARLOCK_AFFLICTION", name = "Aflicción", icon = "Interface\\Icons\\Spell_Shadow_DeathCoil" },
-            { id = "WARLOCK_DEMONOLOGY", name = "Demonología", icon = "Interface\\Icons\\Spell_Shadow_Metamorphosis" },
-            { id = "WARLOCK_DESTRUCTION", name = "Destrucción", icon = "Interface\\Icons\\Spell_Shadow_RainOfFire" },
+            { id = "WARLOCK_AFFLICTION", name = "Aflicción", icon = "Interface\\Icons\\Spell_Shadow_DeathCoil", roles = { RDPS = true } },
+            { id = "WARLOCK_DEMONOLOGY", name = "Demonología", icon = "Interface\\Icons\\Spell_Shadow_Metamorphosis", roles = { RDPS = true } },
+            { id = "WARLOCK_DESTRUCTION", name = "Destrucción", icon = "Interface\\Icons\\Spell_Shadow_RainOfFire", roles = { RDPS = true } },
         },
     },
     WARRIOR = {
         name = "Guerrero",
         specs = {
-            { id = "WARRIOR_ARMS", name = "Armas", icon = "Interface\\Icons\\Ability_Warrior_SavageBlow" },
-            { id = "WARRIOR_FURY", name = "Furia", icon = "Interface\\Icons\\Ability_Warrior_InnerRage" },
-            { id = "WARRIOR_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance" },
+            { id = "WARRIOR_ARMS", name = "Armas", icon = "Interface\\Icons\\Ability_Warrior_SavageBlow", roles = { MDPS = true } },
+            { id = "WARRIOR_FURY", name = "Furia", icon = "Interface\\Icons\\Ability_Warrior_InnerRage", roles = { MDPS = true } },
+            { id = "WARRIOR_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance", roles = { TANK = true } },
         },
     },
 }

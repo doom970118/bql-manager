@@ -77,6 +77,33 @@ function Addon:GetSpecDefinition(specId)
     return self.SPEC_BY_ID[self:NormalizeSpecId(specId) or ""]
 end
 
+function Addon:GetSlotRole(slot)
+    if not self.SLOT_SET[slot] then
+        return nil
+    end
+    return string.match(slot, "^([A-Z]+)")
+end
+
+function Addon:IsSpecAllowedForSlot(slot, specId)
+    local role = self:GetSlotRole(slot)
+    local spec = self:GetSpecDefinition(specId)
+    return role ~= nil and spec ~= nil and spec.roles[role] == true
+end
+
+function Addon:ClassHasSpecForSlot(classKey, slot)
+    local class = self.CLASSES[classKey]
+    if not class then
+        return false
+    end
+
+    for _, spec in ipairs(class.specs) do
+        if self:IsSpecAllowedForSlot(slot, spec.id) then
+            return true
+        end
+    end
+    return false
+end
+
 function Addon:IsPlaceholder(slot, name)
     name = self:Trim(name)
     return name == "" or strupper(name) == strupper(slot or "")
@@ -99,7 +126,8 @@ function Addon:InitializeDatabase()
     self.db = _G.BQLManagerDB
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
-        record.spec = self:NormalizeSpecId(record.spec) or ""
+        local specId = self:NormalizeSpecId(record.spec)
+        record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     end
     self.db.version = self.DB_VERSION
 end
@@ -182,7 +210,7 @@ function Addon:SetRosterSpec(slot, specId)
     end
 
     local normalized = self:NormalizeSpecId(specId)
-    if not normalized then
+    if not normalized or not self:IsSpecAllowedForSlot(slot, normalized) then
         return false
     end
 
@@ -576,6 +604,8 @@ function Addon:GetValidationIssues()
         local name = record and self:Trim(record.name) or ""
         if not record or not self:GetSpecDefinition(record.spec) then
             AddIssue(slot .. " no tiene una especialización válida seleccionada.")
+        elseif not self:IsSpecAllowedForSlot(slot, record.spec) then
+            AddIssue(slot .. " tiene una especialización incompatible con su función.")
         end
         if self:IsPlaceholder(slot, name) then
             AddIssue(slot .. " no tiene un personaje asignado.")
@@ -845,8 +875,10 @@ function Addon:ReceiveSync(message, sender)
             self:RefreshUI()
         end
     elseif kind == "ROSTER" and self.SLOT_SET[fields[2]] then
-        self.db.roster[fields[2]].name = fields[3] or ""
-        self.db.roster[fields[2]].spec = self:NormalizeSpecId(fields[4]) or ""
+        local slot = fields[2]
+        local specId = self:NormalizeSpecId(fields[4])
+        self.db.roster[slot].name = fields[3] or ""
+        self.db.roster[slot].spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     elseif kind == "BITE" then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then

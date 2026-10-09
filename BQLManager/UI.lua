@@ -182,35 +182,39 @@ local function CreateSpecSelector(parent, slot)
     UIDropDownMenu_Initialize(selector.menu, function(_, level, menuList)
         if level == 1 then
             for _, classKey in ipairs(Addon.CLASS_ORDER) do
-                local class = Addon.CLASSES[classKey]
-                local info = UIDropDownMenu_CreateInfo()
-                info.text = class.name
-                info.value = classKey
-                info.hasArrow = true
-                info.menuList = classKey
-                info.notCheckable = true
-                info.icon = CLASS_ICON_TEXTURE
-                local coords = CLASS_ICON_TCOORDS[classKey]
-                if coords then
-                    info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
+                if Addon:ClassHasSpecForSlot(classKey, slot) then
+                    local class = Addon.CLASSES[classKey]
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = class.name
+                    info.value = classKey
+                    info.hasArrow = true
+                    info.menuList = classKey
+                    info.notCheckable = true
+                    info.icon = CLASS_ICON_TEXTURE
+                    local coords = CLASS_ICON_TCOORDS[classKey]
+                    if coords then
+                        info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
+                    end
+                    UIDropDownMenu_AddButton(info, level)
                 end
-                UIDropDownMenu_AddButton(info, level)
             end
         elseif level == 2 and menuList then
             local class = Addon.CLASSES[menuList]
             if class then
                 for _, spec in ipairs(class.specs) do
-                    local specId = spec.id
-                    local info = UIDropDownMenu_CreateInfo()
-                    info.text = spec.name .. " - " .. class.name
-                    info.value = specId
-                    info.icon = spec.icon
-                    info.checked = selector.selectedSpecId == specId
-                    info.func = function()
-                        Addon:SetRosterSpec(slot, specId)
-                        CloseDropDownMenus()
+                    if Addon:IsSpecAllowedForSlot(slot, spec.id) then
+                        local specId = spec.id
+                        local info = UIDropDownMenu_CreateInfo()
+                        info.text = spec.name .. " - " .. class.name
+                        info.value = specId
+                        info.icon = spec.icon
+                        info.checked = selector.selectedSpecId == specId
+                        info.func = function()
+                            Addon:SetRosterSpec(slot, specId)
+                            CloseDropDownMenus()
+                        end
+                        UIDropDownMenu_AddButton(info, level)
                     end
-                    UIDropDownMenu_AddButton(info, level)
                 end
             end
         end
@@ -469,7 +473,7 @@ function UI:CreateRosterPanel(parent)
     self.rosterRows = {}
 
     CreateSectionTitle(panel, "Plantilla de 25 jugadores", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Pulsa el icono para elegir clase y especialización.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Cada puesto muestra solo las especializaciones compatibles.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
