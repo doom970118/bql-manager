@@ -743,44 +743,6 @@ local function SetInputText(input, value)
     end
 end
 
-function UI:CreateBiteHelper()
-    local position = Addon.db.biteHelper
-    local frame = CreateFrame('Frame', 'BQLManagerBiteHelperFrame', UIParent)
-    self.biteHelperFrame = frame
-    frame:SetWidth(270)
-    frame:SetHeight(76)
-    frame:SetPoint(position.point or 'CENTER', UIParent, position.relativePoint or 'CENTER', position.x or 0, position.y or 150)
-    frame:SetFrameStrata('HIGH')
-    frame:SetToplevel(true)
-    frame:SetClampedToScreen(true)
-    frame:SetMovable(true)
-    frame:EnableMouse(true)
-    frame:RegisterForDrag('LeftButton')
-    SetBackdrop(frame, COLORS.panel, COLORS.border)
-
-    frame:SetScript('OnDragStart', function(self)
-        self:StartMoving()
-    end)
-    frame:SetScript('OnDragStop', function(self)
-        self:StopMovingOrSizing()
-        local point, _, relativePoint, x, y = self:GetPoint(1)
-        Addon.db.biteHelper.point = point
-        Addon.db.biteHelper.relativePoint = relativePoint
-        Addon.db.biteHelper.x = x
-        Addon.db.biteHelper.y = y
-    end)
-    frame:SetScript('OnMouseDown', function(self)
-        self:Raise()
-    end)
-
-    self.biteHelperWave = CreateText(frame, 'GameFontDisableSmall', '', 'TOP', frame, 'TOP', 0, -9)
-    self.biteHelperAction = CreateText(frame, 'GameFontNormalSmall', '', 'TOP', frame, 'TOP', 0, -27)
-    self.biteHelperName = CreateText(frame, 'GameFontNormalLarge', '', 'TOP', frame, 'TOP', 0, -45)
-    self.biteHelperName:SetWidth(246)
-    self.biteHelperName:SetJustifyH('CENTER')
-    frame:Hide()
-end
-
 function UI:CreateMainFrame()
     local frame = CreateFrame("Frame", "BQLManagerMainFrame", UIParent)
     self.frame = frame
@@ -1528,31 +1490,6 @@ function UI:RefreshZones()
     end
 end
 
-function UI:RefreshBiteHelper()
-    if not self.biteHelperFrame then
-        return
-    end
-
-    local assignment = Addon:GetLocalBiteAssignment()
-    if not assignment then
-        self.biteHelperFrame:Hide()
-        return
-    end
-
-    self.biteHelperWave:SetText('Mordida ' .. tostring(assignment.wave))
-    self.biteHelperName:SetText(assignment.name)
-    if assignment.action == 'BITE' then
-        self.biteHelperAction:SetText('MORDER A')
-        self.biteHelperAction:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
-        self.biteHelperFrame:SetBackdropBorderColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3], 1)
-    else
-        self.biteHelperAction:SetText('TE MUERDE')
-        self.biteHelperAction:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
-        self.biteHelperFrame:SetBackdropBorderColor(COLORS.red[1], COLORS.red[2], COLORS.red[3], 1)
-    end
-    self.biteHelperFrame:Show()
-end
-
 function UI:Refresh()
     if not self.frame or not Addon.db then
         return
@@ -1572,7 +1509,6 @@ function UI:Refresh()
     self:RefreshBites()
     self:RefreshCooldowns()
     self:RefreshZones()
-    self:RefreshBiteHelper()
 end
 
 function UI:Toggle()
@@ -1591,6 +1527,5 @@ function UI:Initialize()
         return
     end
     self:CreateMainFrame()
-    self:CreateBiteHelper()
     self:Refresh()
 end

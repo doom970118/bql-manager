@@ -878,39 +878,6 @@ function Addon:GetWaveEdges(wave)
     return result
 end
 
-function Addon:GetLocalBiteAssignment()
-    if not self.state.active or not UnitName then
-        return nil
-    end
-
-    local playerSlot = self:GetSlotForName(UnitName('player'))
-    if not playerSlot then
-        return nil
-    end
-
-    for _, item in ipairs(self:GetWaveEdges(self.state.currentWave)) do
-        if not self.state.completed[item.index] then
-            local edge = item.edge
-            if edge.source == playerSlot then
-                return {
-                    action = 'BITE',
-                    counterpart = edge.target,
-                    name = self:GetSlotName(edge.target),
-                    wave = self.state.currentWave,
-                }
-            elseif edge.target == playerSlot then
-                return {
-                    action = 'BITTEN_BY',
-                    counterpart = edge.source,
-                    name = self:GetSlotName(edge.source),
-                    wave = self.state.currentWave,
-                }
-            end
-        end
-    end
-    return nil
-end
-
 function Addon:RebuildBiteSources()
     if not self.db or not self.db.bites then
         return
