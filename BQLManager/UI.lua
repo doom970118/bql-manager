@@ -272,9 +272,9 @@ function UI:ShowGuildMemberSuggestions(selector, resetOffset)
         self.activeGuildSelector.popup:Hide()
     end
     self.activeGuildSelector = selector
-    self:UpdateGuildMemberSuggestions(selector, resetOffset)
-
     local popup = selector.popup
+    popup.ownerSelector = selector
+    self:UpdateGuildMemberSuggestions(selector, resetOffset)
     popup:ClearAllPoints()
     local bottom = selector:GetBottom()
     if bottom and bottom < popup:GetHeight() + 20 then
@@ -285,31 +285,13 @@ function UI:ShowGuildMemberSuggestions(selector, resetOffset)
     popup:Show()
 end
 
-local function CreateGuildMemberSelector(parent, width, slot)
-    local selector = CreateFrame("Frame", NextName("GuildMemberSelector"), parent)
-    local selectorWidth = width or 150
-    selector:SetWidth(selectorWidth)
-    selector:SetHeight(20)
-    selector.slot = slot
-    selector.offset = 1
-    selector.search = ""
-
-    selector.classIcon = selector:CreateTexture(nil, "ARTWORK")
-    selector.classIcon:SetWidth(16)
-    selector.classIcon:SetHeight(16)
-    selector.classIcon:SetPoint("LEFT", selector, "LEFT", 0, 0)
-
-    selector.editBox = CreateInput(selector, selectorWidth - 42, 20)
-    selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 6, 0)
-
-    selector.arrow = CreateFrame("Button", NextName("GuildArrow"), selector, "UIPanelButtonTemplate")
-    selector.arrow:SetWidth(18)
-    selector.arrow:SetHeight(20)
-    selector.arrow:SetPoint("RIGHT", selector, "RIGHT", 0, 0)
-    selector.arrow:SetText("v")
+function UI:GetGuildMemberSuggestionsPopup()
+    if self.guildSuggestionsPopup then
+        return self.guildSuggestionsPopup
+    end
 
     local popup = CreateFrame("Frame", NextName("GuildSuggestions"), UIParent)
-    selector.popup = popup
+    self.guildSuggestionsPopup = popup
     popup:SetWidth(260)
     popup:SetHeight((GUILD_SUGGESTION_ROWS * 22) + 50)
     popup:SetFrameStrata("DIALOG")
@@ -320,35 +302,39 @@ local function CreateGuildMemberSelector(parent, width, slot)
     SetBackdrop(popup, { 0.035, 0.035, 0.055, 0.99 }, COLORS.border)
     popup:Hide()
 
-    selector.clearButton = CreateFrame("Button", NextName("GuildClearSlot"), popup)
-    selector.clearButton:SetHeight(22)
-    selector.clearButton:SetPoint("TOPLEFT", popup, "TOPLEFT", 5, -5)
-    selector.clearButton:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -5, -5)
-    selector.clearButton:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    selector.clearButton.icon = selector.clearButton:CreateTexture(nil, "ARTWORK")
-    selector.clearButton.icon:SetWidth(16)
-    selector.clearButton.icon:SetHeight(16)
-    selector.clearButton.icon:SetPoint("LEFT", selector.clearButton, "LEFT", 3, 0)
-    selector.clearButton.icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
-    selector.clearButton.label = CreateText(selector.clearButton, "GameFontHighlightSmall", "Dejar puesto vacío", "LEFT", selector.clearButton.icon, "RIGHT", 5, 0)
-    selector.clearButton.label:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
-    selector.clearButton:SetScript("OnMouseDown", function()
+    popup.clearButton = CreateFrame("Button", NextName("GuildClearSlot"), popup)
+    popup.clearButton:SetHeight(22)
+    popup.clearButton:SetPoint("TOPLEFT", popup, "TOPLEFT", 5, -5)
+    popup.clearButton:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -5, -5)
+    popup.clearButton:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    popup.clearButton.icon = popup.clearButton:CreateTexture(nil, "ARTWORK")
+    popup.clearButton.icon:SetWidth(16)
+    popup.clearButton.icon:SetHeight(16)
+    popup.clearButton.icon:SetPoint("LEFT", popup.clearButton, "LEFT", 3, 0)
+    popup.clearButton.icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+    popup.clearButton.label = CreateText(popup.clearButton, "GameFontHighlightSmall", "Dejar puesto vacío", "LEFT", popup.clearButton.icon, "RIGHT", 5, 0)
+    popup.clearButton.label:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
+    popup.clearButton:SetScript("OnMouseDown", function()
+        local selector = popup.ownerSelector
+        if not selector then
+            return
+        end
         Addon:ClearRosterSlot(selector.slot)
         selector.editBox:ClearFocus()
         UI:SetGuildMemberSelectorValue(selector, "")
         popup:Hide()
     end)
-    selector.clearButton:SetScript("OnEnter", function(self)
+    popup.clearButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Dejar puesto vacío")
         GameTooltip:AddLine("Conserva el puesto y sus asignaciones, pero limpia el jugador y la spec.", 0.75, 0.75, 0.75, true)
         GameTooltip:Show()
     end)
-    selector.clearButton:SetScript("OnLeave", function()
+    popup.clearButton:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
 
-    selector.suggestionButtons = {}
+    popup.suggestionButtons = {}
     for rowIndex = 1, GUILD_SUGGESTION_ROWS do
         local button = CreateFrame("Button", NextName("GuildSuggestion"), popup)
         button:SetHeight(22)
@@ -363,7 +349,8 @@ local function CreateGuildMemberSelector(parent, width, slot)
         button.label:SetWidth(220)
         button.label:SetJustifyH("LEFT")
         button:SetScript("OnMouseDown", function(self)
-            if self.member then
+            local selector = popup.ownerSelector
+            if selector and self.member then
                 Addon:AssignGuildMemberToSlot(selector.slot, self.member.name)
                 selector.editBox:ClearFocus()
                 UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
@@ -394,17 +381,52 @@ local function CreateGuildMemberSelector(parent, width, slot)
         button:SetScript("OnLeave", function()
             GameTooltip:Hide()
         end)
-        selector.suggestionButtons[rowIndex] = button
+        popup.suggestionButtons[rowIndex] = button
     end
 
-    selector.footer = CreateText(popup, "GameFontDisableSmall", "", "BOTTOMLEFT", popup, "BOTTOMLEFT", 8, 6)
-    selector.footer:SetWidth(244)
-    selector.footer:SetJustifyH("LEFT")
-
+    popup.footer = CreateText(popup, "GameFontDisableSmall", "", "BOTTOMLEFT", popup, "BOTTOMLEFT", 8, 6)
+    popup.footer:SetWidth(244)
+    popup.footer:SetJustifyH("LEFT")
     popup:SetScript("OnMouseWheel", function(_, delta)
+        local selector = popup.ownerSelector
+        if not selector then
+            return
+        end
         selector.offset = selector.offset - delta
         UI:UpdateGuildMemberSuggestions(selector, false)
     end)
+
+    return popup
+end
+
+local function CreateGuildMemberSelector(parent, width, slot)
+    local selector = CreateFrame("Frame", NextName("GuildMemberSelector"), parent)
+    local selectorWidth = width or 150
+    selector:SetWidth(selectorWidth)
+    selector:SetHeight(20)
+    selector.slot = slot
+    selector.offset = 1
+    selector.search = ""
+
+    selector.classIcon = selector:CreateTexture(nil, "ARTWORK")
+    selector.classIcon:SetWidth(16)
+    selector.classIcon:SetHeight(16)
+    selector.classIcon:SetPoint("LEFT", selector, "LEFT", 0, 0)
+
+    selector.editBox = CreateInput(selector, selectorWidth - 42, 20)
+    selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 6, 0)
+
+    selector.arrow = CreateFrame("Button", NextName("GuildArrow"), selector, "UIPanelButtonTemplate")
+    selector.arrow:SetWidth(18)
+    selector.arrow:SetHeight(20)
+    selector.arrow:SetPoint("RIGHT", selector, "RIGHT", 0, 0)
+    selector.arrow:SetText("v")
+
+    local popup = UI:GetGuildMemberSuggestionsPopup()
+    selector.popup = popup
+    selector.clearButton = popup.clearButton
+    selector.suggestionButtons = popup.suggestionButtons
+    selector.footer = popup.footer
     selector.arrow:SetScript("OnClick", function()
         selector.search = ""
         selector.editBox:SetFocus()
@@ -891,7 +913,7 @@ function UI:CreateMainFrame()
     self:CreateBitesPanel(frame)
     self:CreateCooldownPanel(frame)
     self:CreateZonesPanel(frame)
-    self:ShowTab("summary")
+    self:ShowTab("summary", true)
     frame:Hide()
 end
 
@@ -1357,7 +1379,7 @@ function UI:CreateZonesPanel(parent)
     self:RegisterConfigurationPanel(panel)
 end
 
-function UI:ShowTab(key)
+function UI:ShowTab(key, skipRefresh)
     self.currentTab = key
     if key == "roster" then
         Addon:RequestGuildRoster()
@@ -1377,7 +1399,9 @@ function UI:ShowTab(key)
             button:Enable()
         end
     end
-    self:Refresh()
+    if not skipRefresh then
+        self:Refresh()
+    end
 end
 
 function UI:GetRaidNameSet()
@@ -1657,7 +1681,7 @@ end
 
 function UI:Toggle()
     if not self.frame then
-        return
+        self:Initialize()
     end
     if self.frame:IsShown() then
         self.frame:Hide()
@@ -1671,5 +1695,4 @@ function UI:Initialize()
         return
     end
     self:CreateMainFrame()
-    self:Refresh()
 end

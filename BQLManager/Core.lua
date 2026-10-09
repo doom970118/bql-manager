@@ -2192,11 +2192,6 @@ function Addon:OnAddonLoaded(addonName)
         preferredIndex = 3,
     }
 
-    if self.UI and self.UI.Initialize then
-        self.UI:Initialize()
-    end
-    self:RequestGuildRoster()
-    self:RefreshGroupMemberProfiles()
     self:Print("Cargado. Usa /bql para abrir la ventana.")
 end
 
@@ -2231,7 +2226,6 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PARTY_MEMBERS_CHANGED" then
         Addon:RefreshGroupMemberProfiles()
     elseif event == "PLAYER_ENTERING_WORLD" then
-        Addon:RequestGuildRoster()
         Addon:RefreshGroupMemberProfiles()
     elseif event == "GUILD_ROSTER_UPDATE" then
         Addon:RefreshGuildRosterCache()

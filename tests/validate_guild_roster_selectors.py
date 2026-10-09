@@ -68,13 +68,16 @@ def main() -> None:
     selector = UI.split("local function CreateGuildMemberSelector", 1)[1].split(
         "function UI:SetSpecSelectorValue", 1
     )[0]
+    popup = UI.split("function UI:GetGuildMemberSuggestionsPopup", 1)[1].split(
+        "local function CreateGuildMemberSelector", 1
+    )[0]
     assert "selector.editBox" in selector
     assert 'SetScript("OnTextChanged"' in selector
-    assert 'SetScript("OnMouseWheel"' in selector
+    assert 'SetScript("OnMouseWheel"' in popup
     assert "Addon:GetGuildMemberCandidates" in selector
     assert "Addon:AssignGuildMemberToSlot" in selector
-    assert '"Dejar puesto vacío"' in selector
-    assert "Addon:ClearRosterSlot(selector.slot)" in selector
+    assert '"Dejar puesto vacío"' in popup
+    assert "Addon:ClearRosterSlot(selector.slot)" in popup
     assert "CLASS_ICON_TEXTURE" in UI
     assert "CLASS_ICON_TCOORDS" in UI
     assert "member.online and 1 or 0.55" in UI
