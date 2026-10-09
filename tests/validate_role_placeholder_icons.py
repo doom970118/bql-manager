@@ -17,6 +17,10 @@ def main() -> None:
         "local function SetDropDownRoleIcon(info, role)",
         "SetRoleIcon(selector.classIcon, Addon:GetSlotRole(selector.slot))",
         "SetRoleIcon(selector.icon, Addon:GetSlotRole(selector.slot))",
+        "selector.editBox = CreateInput(selector, selectorWidth - 42, 20)",
+        'selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 6, 0)',
+        "selector.icon:SetWidth(16)",
+        "selector.icon:SetHeight(16)",
         "ResetDropDownButtonLayout(level, iconCoords)",
     ):
         assert snippet in UI

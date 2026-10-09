@@ -287,7 +287,8 @@ end
 
 local function CreateGuildMemberSelector(parent, width, slot)
     local selector = CreateFrame("Frame", NextName("GuildMemberSelector"), parent)
-    selector:SetWidth(width or 150)
+    local selectorWidth = width or 150
+    selector:SetWidth(selectorWidth)
     selector:SetHeight(20)
     selector.slot = slot
     selector.offset = 1
@@ -298,8 +299,8 @@ local function CreateGuildMemberSelector(parent, width, slot)
     selector.classIcon:SetHeight(16)
     selector.classIcon:SetPoint("LEFT", selector, "LEFT", 0, 0)
 
-    selector.editBox = CreateInput(selector, (width or 150) - 38, 20)
-    selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 2, 0)
+    selector.editBox = CreateInput(selector, selectorWidth - 42, 20)
+    selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 6, 0)
 
     selector.arrow = CreateFrame("Button", NextName("GuildArrow"), selector, "UIPanelButtonTemplate")
     selector.arrow:SetWidth(18)
@@ -472,11 +473,15 @@ function UI:SetSpecSelectorValue(selector, specId)
     selector.selectedSpecId = spec and spec.id or nil
 
     if not spec then
+        selector.icon:SetWidth(16)
+        selector.icon:SetHeight(16)
         SetRoleIcon(selector.icon, Addon:GetSlotRole(selector.slot))
         selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
         return
     end
 
+    selector.icon:SetWidth(20)
+    selector.icon:SetHeight(20)
     selector.icon:SetTexture(spec.icon)
     selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     selector.icon:SetVertexColor(1, 1, 1, 1)
