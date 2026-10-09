@@ -186,6 +186,10 @@ local function CreateInput(parent, width, height)
 end
 
 local GUILD_SUGGESTION_ROWS = 8
+local ROSTER_SLOT_OFFSET = 14
+local ROSTER_SELECTOR_OFFSET = 77
+local ROSTER_INPUT_OFFSET = 99
+local ROSTER_SPEC_OFFSET = 241
 
 function UI:SetGuildMemberSelectorValue(selector, name)
     if not selector or not selector.editBox then
@@ -1051,9 +1055,9 @@ function UI:CreateRosterPanel(parent)
     }
 
     for _, column in ipairs(columns) do
-        CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", column.x + 14, -47)
-        CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", column.x + 83, -47)
-        CreateText(panel, "GameFontNormalSmall", "Spec", "TOPLEFT", panel, "TOPLEFT", column.x + 240, -47)
+        CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", column.x + ROSTER_SLOT_OFFSET, -47)
+        CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", column.x + ROSTER_INPUT_OFFSET, -47)
+        CreateText(panel, "GameFontNormalSmall", "Spec", "TOPLEFT", panel, "TOPLEFT", column.x + ROSTER_SPEC_OFFSET, -47)
 
         for index = column.startIndex, column.endIndex do
             local slot = Addon.SLOT_ORDER[index]
@@ -1488,11 +1492,11 @@ function UI:RefreshRoster()
         row.online:ClearAllPoints()
         row.online:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX, y - 2)
         row.slot:ClearAllPoints()
-        row.slot:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 14, y)
+        row.slot:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + ROSTER_SLOT_OFFSET, y)
         row.name:ClearAllPoints()
-        row.name:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 77, y + 5)
+        row.name:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + ROSTER_SELECTOR_OFFSET, y + 5)
         row.spec:ClearAllPoints()
-        row.spec:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 241, y + 3)
+        row.spec:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + ROSTER_SPEC_OFFSET, y + 3)
 
         row.online:Show()
         row.slot:Show()
