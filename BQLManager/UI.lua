@@ -185,7 +185,9 @@ local function CreateSpecSelector(parent, slot)
                 if Addon:ClassHasSpecForSlot(classKey, slot) then
                     local class = Addon.CLASSES[classKey]
                     local info = UIDropDownMenu_CreateInfo()
-                    info.text = " "
+                    -- El texto invisible reserva espacio para que la flecha amarilla
+                    -- del submenú no se dibuje encima del icono de la clase.
+                    info.text = "            "
                     info.value = classKey
                     info.hasArrow = true
                     info.menuList = classKey

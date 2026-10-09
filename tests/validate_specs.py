@@ -50,7 +50,7 @@ def main() -> None:
     assert "UIDropDownMenu_Initialize" in UI
     assert "Addon:ClassHasSpecForSlot(classKey, slot)" in UI
     assert "Addon:IsSpecAllowedForSlot(slot, spec.id)" in UI
-    assert 'info.text = " "' in UI
+    assert 'info.text = "            "' in UI
     assert "info.tooltipTitle = class.name" in UI
     assert "row.spec = CreateSpecSelector(panel, slot)" in UI
     assert 'SetRosterValue(currentSlot, "spec"' not in UI
