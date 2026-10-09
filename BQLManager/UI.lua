@@ -747,7 +747,7 @@ function UI:CreateCooldownPanel(parent)
     self.cooldownRows = {}
 
     CreateSectionTitle(panel, "Cooldowns y amenaza", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Edita los puestos; los nombres se resuelven desde la plantilla.", "TOPLEFT", panel, "TOPLEFT", 230, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Los selectores muestran solo puestos compatibles; el nombre se resuelve desde la plantilla.", "TOPLEFT", panel, "TOPLEFT", 230, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local function BuildStandardGroup(group, title, x, y)
@@ -757,24 +757,20 @@ function UI:CreateCooldownPanel(parent)
         for index = 1, #records do
             local rowY = y - 29 - ((index - 1) * 28)
             local row = { group = group, index = index }
+            local currentGroup = group
+            local currentIndex = index
             row.label = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 4, rowY)
             row.label:SetWidth(125)
             row.label:SetJustifyH("LEFT")
-            row.slot = CreateInput(panel, 82, 20)
+            row.slot = CreateRosterSlotSelector(panel, 82, function(slot)
+                Addon:SetCooldownAssignment(currentGroup, currentIndex, "slot", slot)
+            end, nil, function(slot)
+                return Addon:IsCooldownSlotEligible(currentGroup, currentIndex, "slot", slot, true)
+            end)
             row.slot:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 130, rowY + 5)
             row.name = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 228, rowY)
             row.name:SetWidth(145)
             row.name:SetJustifyH("LEFT")
-
-            local currentGroup = group
-            local currentIndex = index
-            row.slot:SetScript("OnEditFocusLost", function(box)
-                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
-                if slot then
-                    Addon.db.cooldowns[currentGroup][currentIndex].slot = slot
-                end
-                UI:Refresh()
-            end)
             tinsert(UI.cooldownRows, row)
         end
     end
@@ -785,32 +781,25 @@ function UI:CreateCooldownPanel(parent)
         for index = 1, #records do
             local rowY = y - 29 - ((index - 1) * 30)
             local row = { group = group, index = index }
+            local currentIndex = index
             row.label = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 4, rowY)
             row.label:SetWidth(48)
-            row.source = CreateInput(panel, 78, 20)
+            row.source = CreateRosterSlotSelector(panel, 78, function(slot)
+                Addon:SetCooldownAssignment("threat", currentIndex, "source", slot)
+            end, nil, function(slot)
+                return Addon:IsCooldownSlotEligible("threat", currentIndex, "source", slot, true)
+            end)
             row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 52, rowY + 5)
             row.arrow = CreateText(panel, "GameFontHighlightSmall", ">", "TOPLEFT", panel, "TOPLEFT", x + 142, rowY)
-            row.target = CreateInput(panel, 78, 20)
+            row.target = CreateRosterSlotSelector(panel, 78, function(slot)
+                Addon:SetCooldownAssignment("threat", currentIndex, "target", slot)
+            end, nil, function(slot)
+                return Addon:IsCooldownSlotEligible("threat", currentIndex, "target", slot, true)
+            end)
             row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 158, rowY + 5)
             row.name = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 248, rowY)
             row.name:SetWidth(130)
             row.name:SetJustifyH("LEFT")
-
-            local currentIndex = index
-            row.source:SetScript("OnEditFocusLost", function(box)
-                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
-                if slot then
-                    Addon.db.cooldowns.threat[currentIndex].source = slot
-                end
-                UI:Refresh()
-            end)
-            row.target:SetScript("OnEditFocusLost", function(box)
-                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
-                if slot then
-                    Addon.db.cooldowns.threat[currentIndex].target = slot
-                end
-                UI:Refresh()
-            end)
             tinsert(UI.cooldownRows, row)
         end
     end
@@ -1186,11 +1175,11 @@ function UI:RefreshCooldowns()
         local record = Addon.db.cooldowns[row.group][row.index]
         row.label:SetText(record.label or "")
         if row.group == "threat" then
-            SetInputText(row.source, Addon:GetSlotLabel(record.source))
-            SetInputText(row.target, Addon:GetSlotLabel(record.target))
+            self:SetRosterSlotSelectorValue(row.source, record.source)
+            self:SetRosterSlotSelectorValue(row.target, record.target)
             row.name:SetText(Addon:GetSlotName(record.source) .. " > " .. Addon:GetSlotName(record.target))
         else
-            SetInputText(row.slot, Addon:GetSlotLabel(record.slot))
+            self:SetRosterSlotSelectorValue(row.slot, record.slot)
             row.name:SetText(Addon:GetSlotName(record.slot))
         end
     end

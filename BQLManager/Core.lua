@@ -360,6 +360,101 @@ function Addon:SetZoneAssignment(zoneId, slot)
     return true
 end
 
+function Addon:GetCooldownKind(group, index)
+    local record = self.db and self.db.cooldowns and self.db.cooldowns[group] and self.db.cooldowns[group][index]
+    if not record then
+        return nil
+    end
+
+    local label = self:Trim(record.label)
+    if group == "aura" or strfind(label, "Aura Mastery", 1, true) then
+        return "AURA_MASTERY"
+    elseif label == "DSAC" then
+        return "DSAC"
+    elseif strfind(label, "Marea", 1, true) then
+        return "MANA_TIDE"
+    elseif strfind(label, "Himno", 1, true) then
+        return "HYMN"
+    elseif strfind(label, "Tranquilidad", 1, true) then
+        return "TRANQUILITY"
+    elseif strupper(label) == "MD" then
+        return "MISDIRECTION"
+    elseif strfind(label, "Tricks", 1, true) then
+        return "TRICKS"
+    end
+    return nil
+end
+
+function Addon:GetFirstBiteTarget()
+    local firstBite = self:GetWaveEdges(1)[1]
+    return firstBite and firstBite.edge.target or nil
+end
+
+function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion)
+    if not self:IsSlotActive(slot) then
+        return false
+    end
+
+    local kind = self:GetCooldownKind(group, index)
+    if group == "threat" and field == "target" then
+        local role = self:GetSlotRole(slot)
+        if role == "TANK" or slot == self:GetFirstBiteTarget() then
+            return true
+        end
+        return allowDpsPromotion == true and (role == "MDPS" or role == "RDPS")
+    end
+
+    if (group == "threat" and field ~= "source") or (group ~= "threat" and field ~= "slot") then
+        return false
+    end
+
+    local record = self:GetSlotRecord(slot)
+    local spec = record and self:GetSpecDefinition(record.spec)
+    if not spec then
+        return false
+    end
+
+    if kind == "AURA_MASTERY" then
+        return spec.id == "PALADIN_HOLY" or spec.id == "PALADIN_RETRIBUTION"
+    elseif kind == "DSAC" then
+        return spec.id == "PALADIN_PROTECTION" or spec.id == "PALADIN_HOLY"
+    elseif kind == "MANA_TIDE" then
+        return spec.id == "SHAMAN_RESTORATION"
+    elseif kind == "HYMN" then
+        return spec.classKey == "PRIEST"
+    elseif kind == "TRANQUILITY" then
+        return spec.classKey == "DRUID"
+    elseif kind == "MISDIRECTION" then
+        return spec.classKey == "HUNTER"
+    elseif kind == "TRICKS" then
+        return spec.classKey == "ROGUE"
+    end
+    return false
+end
+
+function Addon:SetCooldownAssignment(group, index, field, slot)
+    index = tonumber(index)
+    local record = index and self.db.cooldowns[group] and self.db.cooldowns[group][index]
+    if not record or not self:IsCooldownSlotEligible(group, index, field, slot, true) then
+        return false
+    end
+
+    if group == "threat" and field == "target" then
+        local role = self:GetSlotRole(slot)
+        if role ~= "TANK" and slot ~= self:GetFirstBiteTarget() then
+            local firstBite = self:GetWaveEdges(1)[1]
+            if not firstBite or not self:SetBiteTarget(firstBite.index, slot) then
+                return false
+            end
+            self:Print(self:GetSlotName(slot) .. " pasa a ser la primera mordida para la asignación de " .. tostring(record.label) .. ".")
+        end
+    end
+
+    record[field] = slot
+    self:RefreshUI()
+    return true
+end
+
 function Addon:SetRosterValue(slot, field, value)
     if not self.SLOT_SET[slot] then
         return
@@ -570,6 +665,7 @@ function Addon:SetBiteTarget(index, slot)
 
     local edge = self.db.bites[index]
     local oldTarget = edge.target
+    local followsFirstBite = index == 1 and oldTarget ~= slot and self:GetSlotRole(oldTarget) ~= "TANK"
     if oldTarget ~= slot then
         for otherIndex, otherEdge in ipairs(self.db.bites) do
             if otherIndex ~= index and otherEdge.target == slot then
@@ -578,6 +674,14 @@ function Addon:SetBiteTarget(index, slot)
             end
         end
         edge.target = slot
+    end
+
+    if followsFirstBite then
+        for _, record in ipairs(self.db.cooldowns.threat or {}) do
+            if record.target == oldTarget then
+                record.target = slot
+            end
+        end
     end
 
     self:RebuildBiteSources()
@@ -1077,16 +1181,16 @@ function Addon:GetValidationIssues()
     end
 
     for group, records in pairs(self.db.cooldowns) do
-        for _, record in ipairs(records) do
+        for index, record in ipairs(records) do
             if group == "threat" then
-                if not self:IsSlotActive(record.source) then
-                    AddIssue("Origen inválido en MD/Tricks: " .. tostring(record.source) .. ".")
+                if not self:IsCooldownSlotEligible(group, index, "source", record.source, false) then
+                    AddIssue(self:GetSlotLabel(record.source) .. " no puede lanzar " .. tostring(record.label) .. ".")
                 end
-                if not self:IsSlotActive(record.target) then
-                    AddIssue("Destino inválido en MD/Tricks: " .. tostring(record.target) .. ".")
+                if not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
+                    AddIssue("Destino inválido para " .. tostring(record.label) .. ": debe ser un tanque o la primera mordida.")
                 end
-            elseif not self:IsSlotActive(record.slot) then
-                AddIssue("Puesto inválido en " .. tostring(record.label) .. ": " .. tostring(record.slot) .. ".")
+            elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
+                AddIssue(self:GetSlotLabel(record.slot) .. " no puede usar " .. tostring(record.label) .. ".")
             end
         end
     end

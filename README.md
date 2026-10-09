@@ -12,7 +12,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Detección de la primera mordida real del boss para adaptar el árbol y los calls si eligió a un jugador distinto del planeado.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
-- Asignaciones de Aura Mastery, primer y segundo vuelo, MD y Tricks.
+- Selectores validados para Aura Mastery, vuelos, MD y Tricks según clase, especialización y destino.
 - Mapa visual reconstruido desde el Excel, con posiciones seleccionables por rol, intercambio automático y nombres dinámicos.
 - Notas tácticas de posiciones, rango y Sombras enjambradoras.
 - Importación de la banda actual sin destruir asignaciones válidas.
@@ -51,5 +51,7 @@ En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los oríge
 Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
 
 En `Zonas`, haz clic sobre una posición del mapa para elegir un puesto compatible. Las zonas de tanque solo muestran tanques, las melee solo MDPS, las ranged solo RDPS y las de sanación solo healers. El menú muestra `puesto · jugador`; si el puesto ya estaba colocado en otra posición, ambos se intercambian. El mapa guarda y sincroniza esta distribución.
+
+En `Cooldowns`, cada selector muestra únicamente personajes capaces de usar la habilidad: Aura Mastery admite paladines Holy o Retribution; DSAC, Protection o Holy; Marea de maná, chamanes Restoration; los himnos, sacerdotes; Tranquilidad, druidas; MD, cazadores; y Tricks, pícaros. Los destinos de MD/Tricks pueden ser tanques o la primera mordida. Al seleccionar otro DPS como destino, ese puesto pasa automáticamente a ser la primera mordida y se reconstruye el árbol.
 
 Los anuncios a `RAID_WARNING` requieren ser líder o asistente. Si no lo eres, el addon usa el canal de banda normal.
