@@ -162,6 +162,255 @@ local function CreateInput(parent, width, height)
     return input
 end
 
+local GUILD_SUGGESTION_ROWS = 8
+
+function UI:SetGuildMemberSelectorValue(selector, name)
+    if not selector or not selector.editBox then
+        return
+    end
+
+    if not selector.editBox:HasFocus() then
+        selector.suppressSearch = true
+        selector.editBox:SetText(tostring(name or ""))
+        selector.suppressSearch = false
+    end
+
+    local member = Addon:GetGuildMemberProfile(name)
+    local classKey = member and member.classKey or Addon:GetRosterClassKey(selector.slot)
+    local coords = CLASS_ICON_TCOORDS[classKey]
+    if coords then
+        selector.classIcon:SetTexture(CLASS_ICON_TEXTURE)
+        selector.classIcon:SetTexCoord(unpack(coords))
+        selector.classIcon:SetVertexColor(1, 1, 1, 1)
+    else
+        selector.classIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        selector.classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        selector.classIcon:SetVertexColor(0.65, 0.65, 0.70, 1)
+    end
+end
+
+function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
+    if resetOffset then
+        selector.offset = 1
+    end
+
+    local candidates = Addon:GetGuildMemberCandidates(selector.slot, selector.search or "")
+    selector.candidates = candidates
+    local maximumOffset = #candidates - GUILD_SUGGESTION_ROWS + 1
+    if maximumOffset < 1 then
+        maximumOffset = 1
+    end
+    if selector.offset > maximumOffset then
+        selector.offset = maximumOffset
+    elseif selector.offset < 1 then
+        selector.offset = 1
+    end
+
+    for rowIndex, button in ipairs(selector.suggestionButtons) do
+        local member = candidates[selector.offset + rowIndex - 1]
+        button.member = member
+        if member then
+            local coords = CLASS_ICON_TCOORDS[member.classKey]
+            button.icon:SetTexture(CLASS_ICON_TEXTURE)
+            if coords then
+                button.icon:SetTexCoord(unpack(coords))
+            else
+                button.icon:SetTexCoord(0, 1, 0, 1)
+            end
+            button.icon:SetAlpha(member.online and 1 or 0.55)
+            button.label:SetText(member.name)
+            local color = _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[member.classKey]
+            if color then
+                button.label:SetTextColor(color.r, color.g, color.b)
+            else
+                button.label:SetTextColor(0.90, 0.90, 0.95)
+            end
+            button:Show()
+        elseif rowIndex == 1 and #candidates == 0 then
+            button.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+            button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            button.icon:SetAlpha(0.6)
+            button.label:SetText("Sin coincidencias compatibles")
+            button.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+            button:Show()
+        else
+            button:Hide()
+        end
+    end
+
+    selector.footer:SetText(tostring(#candidates) .. " miembro(s) · rueda para desplazar")
+end
+
+function UI:ShowGuildMemberSuggestions(selector, resetOffset)
+    if self.activeGuildSelector and self.activeGuildSelector ~= selector then
+        self.activeGuildSelector.popup:Hide()
+    end
+    self.activeGuildSelector = selector
+    self:UpdateGuildMemberSuggestions(selector, resetOffset)
+
+    local popup = selector.popup
+    popup:ClearAllPoints()
+    local bottom = selector:GetBottom()
+    if bottom and bottom < popup:GetHeight() + 20 then
+        popup:SetPoint("BOTTOMLEFT", selector, "TOPLEFT", 0, 2)
+    else
+        popup:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
+    end
+    popup:Show()
+end
+
+local function CreateGuildMemberSelector(parent, width, slot)
+    local selector = CreateFrame("Frame", NextName("GuildMemberSelector"), parent)
+    selector:SetWidth(width or 150)
+    selector:SetHeight(20)
+    selector.slot = slot
+    selector.offset = 1
+    selector.search = ""
+
+    selector.classIcon = selector:CreateTexture(nil, "ARTWORK")
+    selector.classIcon:SetWidth(16)
+    selector.classIcon:SetHeight(16)
+    selector.classIcon:SetPoint("LEFT", selector, "LEFT", 0, 0)
+
+    selector.editBox = CreateInput(selector, (width or 150) - 38, 20)
+    selector.editBox:SetPoint("LEFT", selector.classIcon, "RIGHT", 2, 0)
+
+    selector.arrow = CreateFrame("Button", NextName("GuildArrow"), selector, "UIPanelButtonTemplate")
+    selector.arrow:SetWidth(18)
+    selector.arrow:SetHeight(20)
+    selector.arrow:SetPoint("RIGHT", selector, "RIGHT", 0, 0)
+    selector.arrow:SetText("v")
+
+    local popup = CreateFrame("Frame", NextName("GuildSuggestions"), UIParent)
+    selector.popup = popup
+    popup:SetWidth(260)
+    popup:SetHeight((GUILD_SUGGESTION_ROWS * 22) + 28)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetFrameLevel(120)
+    popup:SetClampedToScreen(true)
+    popup:EnableMouse(true)
+    popup:EnableMouseWheel(true)
+    SetBackdrop(popup, { 0.035, 0.035, 0.055, 0.99 }, COLORS.border)
+    popup:Hide()
+
+    selector.suggestionButtons = {}
+    for rowIndex = 1, GUILD_SUGGESTION_ROWS do
+        local button = CreateFrame("Button", NextName("GuildSuggestion"), popup)
+        button:SetHeight(22)
+        button:SetPoint("TOPLEFT", popup, "TOPLEFT", 5, -5 - ((rowIndex - 1) * 22))
+        button:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -5, -5 - ((rowIndex - 1) * 22))
+        button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetWidth(16)
+        button.icon:SetHeight(16)
+        button.icon:SetPoint("LEFT", button, "LEFT", 3, 0)
+        button.label = CreateText(button, "GameFontHighlightSmall", "", "LEFT", button.icon, "RIGHT", 5, 0)
+        button.label:SetWidth(220)
+        button.label:SetJustifyH("LEFT")
+        button:SetScript("OnMouseDown", function(self)
+            if self.member then
+                Addon:AssignGuildMemberToSlot(selector.slot, self.member.name)
+                selector.editBox:ClearFocus()
+                UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
+                popup:Hide()
+            end
+        end)
+        button:SetScript("OnEnter", function(self)
+            if not self.member then
+                return
+            end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(self.member.name)
+            local class = Addon.CLASSES[self.member.classKey]
+            if class then
+                GameTooltip:AddLine(class.name, 1, 1, 1)
+            end
+            local spec = Addon:GetSpecDefinition(self.member.spec)
+            if spec then
+                GameTooltip:AddLine("Spec guardada: " .. spec.name, 0.75, 0.75, 0.75)
+            else
+                GameTooltip:AddLine("Spec todavía desconocida", 1, 0.82, 0.20)
+            end
+            GameTooltip:AddLine(self.member.online and "Conectado" or "Offline", self.member.online and 0.25 or 0.65, self.member.online and 0.95 or 0.65, self.member.online and 0.45 or 0.70)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        selector.suggestionButtons[rowIndex] = button
+    end
+
+    selector.footer = CreateText(popup, "GameFontDisableSmall", "", "BOTTOMLEFT", popup, "BOTTOMLEFT", 8, 6)
+    selector.footer:SetWidth(244)
+    selector.footer:SetJustifyH("LEFT")
+
+    popup:SetScript("OnMouseWheel", function(_, delta)
+        selector.offset = selector.offset - delta
+        UI:UpdateGuildMemberSuggestions(selector, false)
+    end)
+    selector.arrow:SetScript("OnClick", function()
+        selector.search = ""
+        selector.editBox:SetFocus()
+        selector.editBox:HighlightText()
+        UI:ShowGuildMemberSuggestions(selector, true)
+    end)
+    selector.editBox:SetScript("OnEditFocusGained", function(self)
+        selector.search = ""
+        self:HighlightText()
+        UI:ShowGuildMemberSuggestions(selector, true)
+    end)
+    selector.editBox:SetScript("OnTextChanged", function(self)
+        if selector.suppressSearch or not self:HasFocus() then
+            return
+        end
+        selector.search = self:GetText()
+        UI:ShowGuildMemberSuggestions(selector, true)
+    end)
+    selector.editBox:SetScript("OnEnterPressed", function(self)
+        local candidates = Addon:GetGuildMemberCandidates(selector.slot, self:GetText())
+        local selected
+        for _, member in ipairs(candidates) do
+            if Addon:NormalizeName(member.name) == Addon:NormalizeName(self:GetText()) then
+                selected = member
+                break
+            end
+        end
+        selected = selected or (#candidates == 1 and candidates[1] or nil)
+        if selected then
+            Addon:AssignGuildMemberToSlot(selector.slot, selected.name)
+        else
+            UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
+        end
+        self:ClearFocus()
+        UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
+        popup:Hide()
+    end)
+    selector.editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        popup:Hide()
+        UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
+    end)
+    selector.editBox:SetScript("OnEditFocusLost", function()
+        if not MouseIsOver or not MouseIsOver(popup) then
+            popup:Hide()
+            UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(selector.slot).name)
+        end
+    end)
+    selector:SetScript("OnHide", function()
+        popup:Hide()
+    end)
+    selector:EnableMouse(true)
+    selector:SetScript("OnMouseDown", function()
+        selector.search = ""
+        selector.editBox:SetFocus()
+        selector.editBox:HighlightText()
+        UI:ShowGuildMemberSuggestions(selector, true)
+    end)
+
+    UI:SetGuildMemberSelectorValue(selector, Addon:GetSlotRecord(slot).name)
+    return selector
+end
+
 function UI:SetSpecSelectorValue(selector, specId)
     local spec = Addon:GetSpecDefinition(specId)
     selector.selectedSpecId = spec and spec.id or nil
@@ -686,15 +935,10 @@ function UI:CreateRosterPanel(parent)
             row.online = CreateText(panel, "GameFontHighlightSmall", "o", "TOPLEFT", panel, "TOPLEFT", 0, 0)
             row.slot = CreateText(panel, "GameFontHighlightSmall", slot, "TOPLEFT", panel, "TOPLEFT", 0, 0)
             row.slot:SetWidth(64)
-            row.name = CreateInput(panel, 150, 20)
+            row.name = CreateGuildMemberSelector(panel, 150, slot)
             row.name:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
             row.spec = CreateSpecSelector(panel, slot)
             row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
-
-            local currentSlot = slot
-            row.name:SetScript("OnEditFocusLost", function(box)
-                Addon:SetRosterValue(currentSlot, "name", box:GetText())
-            end)
             self.rosterRows[slot] = row
         end
     end
@@ -994,6 +1238,9 @@ end
 
 function UI:ShowTab(key)
     self.currentTab = key
+    if key == "roster" then
+        Addon:RequestGuildRoster()
+    end
     for tabKey, panel in pairs(self.panels) do
         if tabKey == key then
             panel:Show()
@@ -1106,7 +1353,7 @@ function UI:RefreshRoster()
         row.name:Show()
         row.spec:Show()
         row.slot:SetText(Addon:GetSlotLabel(slot))
-        SetInputText(row.name, record.name)
+        self:SetGuildMemberSelectorValue(row.name, record.name)
         self:SetSpecSelectorValue(row.spec, record.spec)
         if raidNames[Addon:NormalizeName(record.name)] then
             row.online:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])

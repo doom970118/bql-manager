@@ -5,6 +5,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 ## Funciones
 
 - Plantilla editable de 25 puestos: 2 tanques, 8 melee, 10 ranged y 5 healers.
+- Selector buscable de miembros de hermandad, incluidos los offline, con icono de clase y perfiles persistentes de clase/spec.
 - Selector con iconos para las 30 especializaciones de WotLK, filtradas según el puesto TANK, MDPS, RDPS o HEALER.
 - Composición flexible con controles para quitar y añadir funciones, máximo dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
@@ -45,6 +46,8 @@ La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asig
 Antes del pull, completa los nombres genéricos que queden en la pestaña `Plantilla`, pulsa `Validar` y luego `Sincronizar`. Al iniciar el intento, usa `Iniciar`. El addon anuncia la ronda actual y susurra a cada mordedor su objetivo. El seguimiento automático usa los hechizos de WotLK 3.3.5a: Mordedura vampírica (71726), Esencia de la Reina de Sangre (70867 y variantes) y Sed de sangre frenética (70877).
 
 La cabecera de `Plantilla` permite quitar (`-`) y añadir (`+`) puestos por función. Con la plantilla en 25/25, quita primero el puesto que sobra y luego añade el nuevo rol. No se puede retirar un puesto que todavía esté usado en mordidas o cooldowns; hay que reasignarlo antes. La composición admite como máximo dos tanques y siempre conserva al menos un healer.
+
+Los nombres de `Plantilla` se eligen desde la hermandad. Haz clic y escribe parte del nombre para filtrar; el icono identifica la clase y los miembros offline siguen disponibles. La API de WotLK no publica la spec de un personaje offline: el addon la aprende al inspeccionarlo cuando entra al grupo y está a distancia, o cuando se selecciona manualmente su spec, y la conserva en `BQLManagerDB`. Hasta conocerla, el jugador aparece en los roles que su clase puede desempeñar; si la clase tiene varias specs compatibles, hay que elegir el icono de spec una vez. Si seleccionas a alguien que ya ocupa otro puesto, ambos jugadores se intercambian.
 
 En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los orígenes de las rondas siguientes se recalculan automáticamente. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
 

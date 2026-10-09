@@ -14,6 +14,7 @@ local strsub = string.sub
 local strupper = string.upper
 local tinsert = table.insert
 local tremove = table.remove
+local tsort = table.sort
 local type = type
 local tostring = tostring
 
@@ -27,6 +28,10 @@ Addon.state = {
 
 Addon.messageQueue = {}
 Addon.queueElapsed = 0
+Addon.inspectQueue = {}
+Addon.inspectQueued = {}
+Addon.inspectElapsed = 0
+Addon.pendingInspect = nil
 
 local function DeepCopy(value)
     if type(value) ~= "table" then
@@ -181,6 +186,185 @@ function Addon:ClassHasSpecForSlot(classKey, slot)
     return false
 end
 
+function Addon:GetRosterClassKey(slot)
+    local record = self:GetSlotRecord(slot)
+    if not record then
+        return nil
+    end
+
+    local spec = self:GetSpecDefinition(record.spec)
+    if spec then
+        return spec.classKey
+    end
+
+    local member = self:GetGuildMemberProfile(record.name)
+    return member and member.classKey or nil
+end
+
+function Addon:GetGuildMemberProfile(name)
+    if not self.db or type(self.db.guildMembers) ~= "table" then
+        return nil
+    end
+    return self.db.guildMembers[self:NormalizeName(name)]
+end
+
+function Addon:RememberPlayerProfile(name, classKey, specId, online, isGuildMember, specSource)
+    if not self.db then
+        return nil
+    end
+    if type(self.db.guildMembers) ~= "table" then
+        self.db.guildMembers = {}
+    end
+
+    name = string.gsub(self:Trim(name), "%-.*$", "")
+    local key = self:NormalizeName(name)
+    if key == "" then
+        return nil
+    end
+
+    classKey = strupper(self:Trim(classKey))
+    if not self.CLASSES[classKey] then
+        classKey = nil
+    end
+
+    local member = self.db.guildMembers[key] or {}
+    member.name = name
+    if classKey then
+        member.classKey = classKey
+        local oldSpec = self:GetSpecDefinition(member.spec)
+        if oldSpec and oldSpec.classKey ~= classKey then
+            member.spec = ""
+            member.specSource = nil
+        end
+    end
+
+    local normalizedSpec = self:NormalizeSpecId(specId)
+    local spec = self:GetSpecDefinition(normalizedSpec)
+    if spec and (not classKey or spec.classKey == classKey) then
+        member.spec = normalizedSpec
+        member.classKey = spec.classKey
+        member.specSource = specSource or member.specSource or "roster"
+    elseif member.spec == nil then
+        member.spec = ""
+    end
+
+    if online ~= nil then
+        member.online = online and true or false
+    end
+    if isGuildMember ~= nil then
+        member.inGuild = isGuildMember and true or false
+    end
+
+    self.db.guildMembers[key] = member
+    return member
+end
+
+function Addon:RememberRosterPlayer(slot, specSource)
+    local record = self:GetSlotRecord(slot)
+    if not record or self:IsPlaceholder(slot, record.name) then
+        return nil
+    end
+
+    local spec = self:GetSpecDefinition(record.spec)
+    return self:RememberPlayerProfile(
+        record.name,
+        spec and spec.classKey or self:GetRosterClassKey(slot),
+        record.spec,
+        nil,
+        nil,
+        specSource or "roster"
+    )
+end
+
+function Addon:IsGuildMemberEligibleForSlot(member, slot)
+    if not member or not member.inGuild or not self:IsSlotActive(slot) then
+        return false
+    end
+
+    local specId = self:NormalizeSpecId(member.spec)
+    if specId then
+        return self:IsSpecAllowedForSlot(slot, specId)
+    end
+    return self:ClassHasSpecForSlot(member.classKey, slot)
+end
+
+function Addon:GetGuildMemberCandidates(slot, search)
+    local result = {}
+    if not self.db or type(self.db.guildMembers) ~= "table" then
+        return result
+    end
+
+    local query = self:NormalizeName(search)
+    for _, member in pairs(self.db.guildMembers) do
+        if self:IsGuildMemberEligibleForSlot(member, slot) then
+            local normalizedName = self:NormalizeName(member.name)
+            if query == "" or strfind(normalizedName, query, 1, true) then
+                tinsert(result, member)
+            end
+        end
+    end
+    tsort(result, function(left, right)
+        return self:NormalizeName(left.name) < self:NormalizeName(right.name)
+    end)
+    return result
+end
+
+function Addon:GetGuildMemberSpecForSlot(member, slot)
+    local specId = self:NormalizeSpecId(member and member.spec)
+    if specId and self:IsSpecAllowedForSlot(slot, specId) then
+        return specId, false
+    end
+
+    local class = member and self.CLASSES[member.classKey]
+    local onlySpec
+    local count = 0
+    for _, spec in ipairs(class and class.specs or {}) do
+        if self:IsSpecAllowedForSlot(slot, spec.id) then
+            onlySpec = spec.id
+            count = count + 1
+        end
+    end
+    if count == 1 then
+        return onlySpec, true
+    end
+    return "", false
+end
+
+function Addon:RefreshGuildRosterCache()
+    if not self.db or not GetNumGuildMembers or not GetGuildRosterInfo then
+        return
+    end
+
+    local total = GetNumGuildMembers() or 0
+    if total <= 0 and (not GetGuildInfo or not GetGuildInfo("player")) then
+        for _, member in pairs(self.db.guildMembers) do
+            member.inGuild = false
+            member.online = false
+        end
+        self:RefreshUI()
+        return
+    end
+
+    for _, member in pairs(self.db.guildMembers) do
+        member.inGuild = false
+        member.online = false
+    end
+
+    for index = 1, total do
+        local name, _, _, _, _, _, _, _, online, _, classFileName = GetGuildRosterInfo(index)
+        if name then
+            self:RememberPlayerProfile(name, classFileName, nil, online, true)
+        end
+    end
+    self:RefreshUI()
+end
+
+function Addon:RequestGuildRoster()
+    if GuildRoster and (not IsInGuild or IsInGuild()) then
+        GuildRoster()
+    end
+end
+
 function Addon:IsPlaceholder(slot, name)
     name = self:Trim(name)
     return name == ""
@@ -248,6 +432,10 @@ function Addon:PrepareRoster()
         local record = self.db.roster[slot]
         local specId = self:NormalizeSpecId(record.spec)
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
+    end
+
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
+        self:RememberRosterPlayer(slot, "roster")
     end
 
     self:PrepareZoneAssignments()
@@ -491,7 +679,48 @@ function Addon:SetRosterValue(slot, field, value)
     end
 
     self.db.roster[slot][field] = self:Trim(value)
+    self:RememberRosterPlayer(slot, "manual")
     self:RefreshUI()
+end
+
+function Addon:AssignGuildMemberToSlot(slot, name)
+    if not self:IsSlotActive(slot) then
+        return false
+    end
+
+    local member = self:GetGuildMemberProfile(name)
+    if not self:IsGuildMemberEligibleForSlot(member, slot) then
+        return false
+    end
+
+    local record = self.db.roster[slot]
+    local oldName = record.name
+    local oldSpec = record.spec
+    local otherSlot = self:GetSlotForName(member.name)
+    if otherSlot and otherSlot ~= slot then
+        local otherRecord = self.db.roster[otherSlot]
+        if self:IsPlaceholder(slot, oldName) then
+            otherRecord.name = self:GetSlotLabel(otherSlot)
+            otherRecord.spec = ""
+        else
+            otherRecord.name = oldName
+            otherRecord.spec = self:IsSpecAllowedForSlot(otherSlot, oldSpec) and oldSpec or ""
+            self:RememberRosterPlayer(otherSlot, "roster")
+        end
+    end
+
+    local specId, inferred = self:GetGuildMemberSpecForSlot(member, slot)
+    record.name = member.name
+    record.spec = specId
+    if specId ~= "" then
+        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, true, inferred and "role" or member.specSource)
+    end
+
+    if specId == "" then
+        self:Print(member.name .. " no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro.")
+    end
+    self:RefreshUI()
+    return true
 end
 
 function Addon:SetRosterSpec(slot, specId)
@@ -505,6 +734,7 @@ function Addon:SetRosterSpec(slot, specId)
     end
 
     self.db.roster[slot].spec = normalized
+    self:RememberRosterPlayer(slot, "manual")
     self:RefreshUI()
     return true
 end
@@ -1294,6 +1524,177 @@ function Addon:GetRaidMembers()
     return members
 end
 
+function Addon:GetGroupUnitTokens()
+    local units = {}
+    local raidCount = GetNumRaidMembers and GetNumRaidMembers() or 0
+    if raidCount > 0 then
+        for index = 1, raidCount do
+            tinsert(units, "raid" .. tostring(index))
+        end
+        return units
+    end
+
+    tinsert(units, "player")
+    local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
+    for index = 1, partyCount do
+        tinsert(units, "party" .. tostring(index))
+    end
+    return units
+end
+
+function Addon:DetectTalentSpec(classKey, isInspect)
+    local class = self.CLASSES[classKey]
+    if not class or not GetTalentTabInfo then
+        return nil
+    end
+
+    local talentGroup = GetActiveTalentGroup and GetActiveTalentGroup(isInspect and true or false) or nil
+    local bestIndex
+    local bestPoints = -1
+    for index = 1, 3 do
+        local _, _, pointsSpent = GetTalentTabInfo(index, isInspect and true or false, false, talentGroup)
+        pointsSpent = tonumber(pointsSpent) or 0
+        if pointsSpent > bestPoints then
+            bestIndex = index
+            bestPoints = pointsSpent
+        end
+    end
+
+    if bestPoints <= 0 or not class.specs[bestIndex] then
+        return nil
+    end
+    return class.specs[bestIndex].id
+end
+
+function Addon:QueueInspectUnit(unit)
+    if not unit or not UnitExists or not UnitExists(unit) or (UnitIsUnit and UnitIsUnit(unit, "player")) then
+        return
+    end
+
+    local name = UnitName(unit)
+    local key = self:NormalizeName(name)
+    local member = self:GetGuildMemberProfile(name)
+    if key == "" or not member or not member.inGuild or self.inspectQueued[key] then
+        return
+    end
+
+    self.inspectQueued[key] = true
+    tinsert(self.inspectQueue, { unit = unit, name = name, key = key })
+end
+
+function Addon:RefreshGroupMemberProfiles()
+    if not self.db or not UnitName or not UnitClass then
+        return
+    end
+
+    for _, unit in ipairs(self:GetGroupUnitTokens()) do
+        if not UnitExists or UnitExists(unit) then
+            local name = UnitName(unit)
+            local _, classKey = UnitClass(unit)
+            if name and classKey then
+                local connected = not UnitIsConnected or UnitIsConnected(unit)
+                local member = self:RememberPlayerProfile(name, classKey, nil, connected, nil)
+                if UnitIsUnit and UnitIsUnit(unit, "player") then
+                    local specId = self:DetectTalentSpec(classKey, false)
+                    if specId then
+                        member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
+                    end
+                elseif member and member.inGuild and connected then
+                    self:QueueInspectUnit(unit)
+                end
+            end
+        end
+    end
+    self:RefreshUI()
+end
+
+function Addon:UpdateAssignedPlayerSpec(name, specId)
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
+        local record = self.db.roster[slot]
+        if record and self:NormalizeName(record.name) == self:NormalizeName(name) and self:IsSpecAllowedForSlot(slot, specId) then
+            record.spec = specId
+        end
+    end
+end
+
+function Addon:HandleInspectReady(guid)
+    local pending = self.pendingInspect
+    if not pending or (guid and pending.guid and guid ~= pending.guid) then
+        return
+    end
+    if UnitGUID and pending.guid and UnitGUID(pending.unit) ~= pending.guid then
+        self.pendingInspect = nil
+        return
+    end
+
+    local _, classKey = UnitClass(pending.unit)
+    local specId = classKey and self:DetectTalentSpec(classKey, true) or nil
+    if specId then
+        self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
+        self:UpdateAssignedPlayerSpec(pending.name, specId)
+    else
+        self:QueueInspectUnit(pending.unit)
+    end
+
+    self.pendingInspect = nil
+    if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
+        ClearInspectPlayer()
+    end
+    self:RefreshUI()
+end
+
+function Addon:ProcessInspectQueue(elapsed)
+    if not self.db then
+        return
+    end
+
+    if self.pendingInspect then
+        self.pendingInspect.elapsed = (self.pendingInspect.elapsed or 0) + elapsed
+        if self.pendingInspect.elapsed >= 6 then
+            local unit = self.pendingInspect.unit
+            self.pendingInspect = nil
+            if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
+                ClearInspectPlayer()
+            end
+            self:QueueInspectUnit(unit)
+        end
+        return
+    end
+
+    self.inspectElapsed = self.inspectElapsed + elapsed
+    if self.inspectElapsed < 2 or #self.inspectQueue == 0 then
+        return
+    end
+    self.inspectElapsed = 0
+
+    local attempts = #self.inspectQueue
+    while attempts > 0 do
+        attempts = attempts - 1
+        local item = tremove(self.inspectQueue, 1)
+        self.inspectQueued[item.key] = nil
+        local validUnit = UnitExists and UnitExists(item.unit)
+            and self:NormalizeName(UnitName(item.unit)) == item.key
+            and (not UnitIsConnected or UnitIsConnected(item.unit))
+        if validUnit then
+            local canInspect = CanInspect and CanInspect(item.unit)
+            local inRange = not CheckInteractDistance or CheckInteractDistance(item.unit, 1)
+            local inCombat = InCombatLockdown and InCombatLockdown()
+            local inspectFrameOpen = InspectFrame and InspectFrame:IsShown()
+            if canInspect and inRange and not inCombat and not inspectFrameOpen and NotifyInspect then
+                self.pendingInspect = {
+                    unit = item.unit,
+                    name = item.name,
+                    guid = UnitGUID and UnitGUID(item.unit) or nil,
+                    elapsed = 0,
+                }
+                NotifyInspect(item.unit)
+                return
+            end
+            self:QueueInspectUnit(item.unit)
+        end
+    end
+end
+
 function Addon:ImportRaidRoster()
     local members = self:GetRaidMembers()
     if #members == 0 then
@@ -1468,6 +1869,7 @@ function Addon:ReceiveSync(message, sender)
         end
         local specId = self:NormalizeSpecId(fields[4])
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
+        self:RememberRosterPlayer(slot, "sync")
     elseif kind == "BITE" then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
@@ -1563,6 +1965,8 @@ function Addon:OnAddonLoaded(addonName)
     if self.UI and self.UI.Initialize then
         self.UI:Initialize()
     end
+    self:RequestGuildRoster()
+    self:RefreshGroupMemberProfiles()
     self:Print("Cargado. Usa /bql para abrir la ventana.")
 end
 
@@ -1572,6 +1976,10 @@ Addon.eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 Addon.eventFrame:RegisterEvent("CHAT_MSG_ADDON")
 Addon.eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 Addon.eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
+Addon.eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
+Addon.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+Addon.eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+Addon.eventFrame:RegisterEvent("INSPECT_READY")
 
 Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -1588,10 +1996,22 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
             Addon:StartEncounter(true)
         end
     elseif event == "RAID_ROSTER_UPDATE" then
+        Addon:RefreshGroupMemberProfiles()
         Addon:RefreshUI()
+    elseif event == "PARTY_MEMBERS_CHANGED" then
+        Addon:RefreshGroupMemberProfiles()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        Addon:RequestGuildRoster()
+        Addon:RefreshGroupMemberProfiles()
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        Addon:RefreshGuildRosterCache()
+        Addon:RefreshGroupMemberProfiles()
+    elseif event == "INSPECT_READY" then
+        Addon:HandleInspectReady(...)
     end
 end)
 
 Addon.eventFrame:SetScript("OnUpdate", function(_, elapsed)
     Addon:ProcessMessageQueue(elapsed)
+    Addon:ProcessInspectQueue(elapsed)
 end)
