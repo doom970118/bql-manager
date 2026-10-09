@@ -26,6 +26,7 @@ def main() -> None:
     )[0]
     assert "self:IsSpecAllowedForSlot(slot, specId)" in candidates
     assert "self:ClassHasSpecForSlot(member.classKey, slot)" in candidates
+    assert "not member.inGuild and not member.inGroup" in candidates
     assert "strfind(normalizedName, query, 1, true)" in candidates
 
     assignment = CORE.split("function Addon:AssignGuildMemberToSlot", 1)[1].split(
@@ -50,6 +51,9 @@ def main() -> None:
     assert "CanInspect" in inspection
     assert "CheckInteractDistance" in inspection
     assert "NotifyInspect(item.unit)" in inspection
+    assert "member.inGroup = false" in inspection
+    assert "member.inGroup = hasGroup and true or false" in inspection
+    assert "not member.inGroup" in inspection
     assert '"inspect"' in inspection
     assert 'RegisterEvent("INSPECT_READY")' in CORE
     assert 'RegisterEvent("GUILD_ROSTER_UPDATE")' in CORE
@@ -74,6 +78,8 @@ def main() -> None:
     assert "CLASS_ICON_TEXTURE" in UI
     assert "CLASS_ICON_TCOORDS" in UI
     assert "member.online and 1 or 0.55" in UI
+    assert '"Hermandad · En grupo"' in UI
+    assert 'or "Grupo/Banda"' in UI
     assert "Addon:IsPlaceholder(selector.slot, name)" in UI
     assert "displayName = Addon:GetSlotLabel(selector.slot)" in UI
     assert 'if key == "roster" then' in UI

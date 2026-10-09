@@ -277,7 +277,7 @@ function Addon:RememberRosterPlayer(slot, specSource)
 end
 
 function Addon:IsGuildMemberEligibleForSlot(member, slot)
-    if not member or not member.inGuild or not self:IsSlotActive(slot) then
+    if not member or (not member.inGuild and not member.inGroup) or not self:IsSlotActive(slot) then
         return false
     end
 
@@ -725,7 +725,7 @@ function Addon:AssignGuildMemberToSlot(slot, name)
     record.name = member.name
     record.spec = specId
     if specId ~= "" then
-        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, true, inferred and "role" or member.specSource)
+        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, inferred and "role" or member.specSource)
     end
 
     if specId == "" then
@@ -1586,7 +1586,7 @@ function Addon:QueueInspectUnit(unit)
     local name = UnitName(unit)
     local key = self:NormalizeName(name)
     local member = self:GetGuildMemberProfile(name)
-    if key == "" or not member or not member.inGuild or self.inspectQueued[key] then
+    if key == "" or not member or not member.inGroup or self.inspectQueued[key] then
         return
     end
 
@@ -1599,6 +1599,13 @@ function Addon:RefreshGroupMemberProfiles()
         return
     end
 
+    for _, member in pairs(self.db.guildMembers) do
+        member.inGroup = false
+    end
+
+    local raidCount = GetNumRaidMembers and GetNumRaidMembers() or 0
+    local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
+    local hasGroup = raidCount > 0 or partyCount > 0
     for _, unit in ipairs(self:GetGroupUnitTokens()) do
         if not UnitExists or UnitExists(unit) then
             local name = UnitName(unit)
@@ -1606,12 +1613,13 @@ function Addon:RefreshGroupMemberProfiles()
             if name and classKey then
                 local connected = not UnitIsConnected or UnitIsConnected(unit)
                 local member = self:RememberPlayerProfile(name, classKey, nil, connected, nil)
+                member.inGroup = hasGroup and true or false
                 if UnitIsUnit and UnitIsUnit(unit, "player") then
                     local specId = self:DetectTalentSpec(classKey, false)
                     if specId then
                         member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
                     end
-                elseif member and member.inGuild and connected then
+                elseif member and member.inGroup and connected then
                     self:QueueInspectUnit(unit)
                 end
             end

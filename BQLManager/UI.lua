@@ -243,7 +243,7 @@ function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
         end
     end
 
-    selector.footer:SetText(tostring(#candidates) .. " miembro(s) · rueda para desplazar")
+    selector.footer:SetText(tostring(#candidates) .. " candidato(s) · rueda para desplazar")
 end
 
 function UI:ShowGuildMemberSuggestions(selector, resetOffset)
@@ -364,6 +364,8 @@ local function CreateGuildMemberSelector(parent, width, slot)
             else
                 GameTooltip:AddLine("Spec todavía desconocida", 1, 0.82, 0.20)
             end
+            local source = self.member.inGuild and (self.member.inGroup and "Hermandad · En grupo" or "Hermandad") or "Grupo/Banda"
+            GameTooltip:AddLine(source, 0.62, 0.52, 0.96)
             GameTooltip:AddLine(self.member.online and "Conectado" or "Offline", self.member.online and 0.25 or 0.65, self.member.online and 0.95 or 0.65, self.member.online and 0.45 or 0.70)
             GameTooltip:Show()
         end)
