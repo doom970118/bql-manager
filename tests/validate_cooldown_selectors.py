@@ -44,39 +44,51 @@ def main() -> None:
         assert rule in eligibility
     assert 'role == "TANK" or slot == self:GetFirstBiteTarget()' in eligibility
     assert 'role == "MDPS" or role == "RDPS"' in eligibility
-    assert "ignoreUniqueness ~= true" in eligibility
-    assert "self:IsCooldownUserAssignedElsewhere(group, index, field, slot)" in eligibility
+    assert "GetCooldownUserAssignment" not in eligibility
 
-    uniqueness = CORE.split("function Addon:IsCooldownUserAssignedElsewhere", 1)[1].split(
+    assignment_lookup = CORE.split("function Addon:GetCooldownUserAssignment", 1)[1].split(
         "function Addon:IsCooldownSlotEligible", 1
     )[0]
-    assert "otherIndex ~= index" in uniqueness
-    assert "record[field] == slot" in uniqueness
+    assert "otherIndex ~= index" in assignment_lookup
+    assert "record[field] == slot" in assignment_lookup
+    assert "return otherIndex, record" in assignment_lookup
 
     setter = CORE.split("function Addon:SetCooldownAssignment", 1)[1].split(
         "function Addon:SetRosterValue", 1
     )[0]
     assert "self:SetBiteTarget(firstBite.index, slot)" in setter
     assert setter.index("self:SetBiteTarget(firstBite.index, slot)") < setter.index("record[field] = slot")
+    assert 'local userField = group == "threat" and "source" or "slot"' in setter
+    assert "self:GetCooldownUserAssignment(group, index, field, slot)" in setter
+    assert "otherRecord[field] = record[field]" in setter
+    assert setter.index("otherRecord[field] = record[field]") < setter.index("record[field] = slot")
     assert "function Addon:GetFirstBiteTarget" in CORE
     assert '"target", record.target, false' in CORE
     assert 'local userField = group == "threat" and "source" or "slot"' in CORE
     assert "cooldownGroupNames" in CORE
 
-    def available(records: list[str], row: int, slot: str) -> bool:
-        return all(other_row == row or assigned != slot for other_row, assigned in enumerate(records))
+    def swap_assignment(records: list[str], row: int, slot: str) -> None:
+        old_slot = records[row]
+        for other_row, assigned in enumerate(records):
+            if other_row != row and assigned == slot:
+                records[other_row] = old_slot
+                break
+        records[row] = slot
 
     aura = ["MDPS3", "MDPS4", "HEALER1", "HEALER2"]
-    assert available(aura, 0, "MDPS3")
-    assert not available(aura, 1, "MDPS3")
+    swap_assignment(aura, 1, "MDPS3")
+    assert aura == ["MDPS4", "MDPS3", "HEALER1", "HEALER2"]
+    assert len(aura) == len(set(aura))
 
     flight1 = ["TANK2", "HEALER3", "HEALER4", "RDPS9", "MDPS8"]
     flight2 = ["HEALER1", "RDPS9", "HEALER4", "HEALER3", "RDPS5"]
-    assert available(flight1, 2, "HEALER4")
-    assert available(flight2, 2, "HEALER4")
+    swap_assignment(flight1, 3, "HEALER3")
+    assert flight1 == ["TANK2", "RDPS9", "HEALER4", "HEALER3", "MDPS8"]
+    assert flight2[2] == "HEALER4"
 
     threat_sources = ["RDPS7", "RDPS8", "MDPS1", "MDPS2"]
-    assert not available(threat_sources, 1, "RDPS7")
+    swap_assignment(threat_sources, 1, "RDPS7")
+    assert threat_sources == ["RDPS8", "RDPS7", "MDPS1", "MDPS2"]
     threat_targets = ["TANK1", "TANK1", "RDPS1", "TANK1"]
     assert threat_targets.count("TANK1") == 3
 
@@ -97,7 +109,7 @@ def main() -> None:
     assert targets[0] == promoted
     assert len(targets) == len(set(targets)) == 16
 
-    print("Cooldown selectors, unique users, class/spec filters, and first-bite target promotion passed.")
+    print("Cooldown selectors, occupied-user swaps, class/spec filters, and first-bite target promotion passed.")
 
 
 if __name__ == "__main__":
