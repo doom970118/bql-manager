@@ -1063,7 +1063,7 @@ function Addon:AnnounceWave(wave, whisperPlayers)
 
     self:Announce("Mordida " .. tostring(wave) .. ": " .. text)
 
-    if whisperPlayers and self.db.options.whisperAssignments and wave > 1 then
+    if whisperPlayers and self.db.options.whisperAssignments and self:CanSendAssignmentWhispers() and wave > 1 then
         for _, item in ipairs(self:GetWaveEdges(wave)) do
             local edge = item.edge
             local sourceName = self:GetSlotName(edge.source)
@@ -1256,7 +1256,7 @@ function Addon:WarnFrenzy(playerName)
         local edge = item.edge
         if edge.source == slot and not self.state.completed[item.index] then
             local targetName = self:GetSlotName(edge.target)
-            if self.db.options.whisperAssignments then
+            if self.db.options.whisperAssignments and self:CanSendAssignmentWhispers() then
                 self:Whisper(playerName, "¡MUERDE AHORA a " .. targetName .. " (" .. edge.target .. ")!")
             end
             self:Print(playerName .. " debe morder a " .. targetName .. ".")
@@ -1792,6 +1792,16 @@ end
 
 function Addon:CanLeadRaid()
     return (IsRaidLeader and IsRaidLeader()) or (IsRaidOfficer and IsRaidOfficer())
+end
+
+function Addon:CanSendAssignmentWhispers()
+    if GetNumRaidMembers and GetNumRaidMembers() > 0 then
+        return self:CanLeadRaid()
+    end
+    if GetNumPartyMembers and GetNumPartyMembers() > 0 then
+        return IsPartyLeader and IsPartyLeader()
+    end
+    return true
 end
 
 function Addon:IsAuthorizedSender(sender)
