@@ -185,12 +185,15 @@ local function CreateSpecSelector(parent, slot)
                 if Addon:ClassHasSpecForSlot(classKey, slot) then
                     local class = Addon.CLASSES[classKey]
                     local info = UIDropDownMenu_CreateInfo()
-                    info.text = class.name
+                    info.text = " "
                     info.value = classKey
                     info.hasArrow = true
                     info.menuList = classKey
                     info.notCheckable = true
                     info.icon = CLASS_ICON_TEXTURE
+                    info.tooltipTitle = class.name
+                    info.tooltipText = "Ver especializaciones compatibles"
+                    info.tooltipOnButton = true
                     local coords = CLASS_ICON_TCOORDS[classKey]
                     if coords then
                         info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
