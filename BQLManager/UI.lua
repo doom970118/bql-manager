@@ -9,7 +9,6 @@ Addon.UI = UI
 local ipairs = ipairs
 local pairs = pairs
 local strformat = string.format
-local strupper = string.upper
 local tinsert = table.insert
 local tostring = tostring
 local unpack = unpack
@@ -44,6 +43,22 @@ local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS or {
     PALADIN = { 0, 0.25, 0.5, 0.75 },
     DEATHKNIGHT = { 0.25, 0.49609375, 0.5, 0.75 },
 }
+
+local function GetSlotRoleColor(slot)
+    if slot == "BOSS" then
+        return COLORS.boss
+    end
+
+    local role = Addon:GetSlotRole(slot)
+    if role == "MDPS" then
+        return COLORS.melee
+    elseif role == "RDPS" then
+        return COLORS.ranged
+    elseif role == "HEALER" then
+        return COLORS.healers
+    end
+    return COLORS.neutral
+end
 
 -- Mapa G1:Z14 de la hoja de referencia. Los números conservan las zonas
 -- pintadas del Excel: 4=MDPS, 5=RDPS, 6=healers, 7=flames y 8=BQL.
@@ -500,10 +515,31 @@ function UI:CreateRosterPanel(parent)
     local panel = CreatePanel(parent)
     self.panels.roster = panel
     self.rosterRows = {}
+    self.roleControls = {}
 
-    CreateSectionTitle(panel, "Plantilla de 25 jugadores", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Cada puesto muestra solo las especializaciones compatibles.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
-    help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+    CreateSectionTitle(panel, "Plantilla", 16, -12)
+    self.rosterTotal = CreateText(panel, "GameFontDisableSmall", "", "TOPLEFT", panel, "TOPLEFT", 103, -18)
+    self.rosterTotal:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+
+    local roleX = { TANK = 190, MDPS = 295, RDPS = 400, HEALER = 505 }
+    for _, role in ipairs(Addon.ROLE_ORDER) do
+        local x = roleX[role]
+        local currentRole = role
+        local control = {}
+        control.label = CreateText(panel, "GameFontNormalSmall", role, "TOPLEFT", panel, "TOPLEFT", x, -17)
+        control.remove = CreateButton(panel, "-", 18, 18, function()
+            Addon:RemoveRosterRole(currentRole)
+        end)
+        control.remove:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 48, -11)
+        control.count = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 70, -17)
+        control.count:SetWidth(18)
+        control.count:SetJustifyH("CENTER")
+        control.add = CreateButton(panel, "+", 18, 18, function()
+            Addon:AddRosterRole(currentRole)
+        end)
+        control.add:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 87, -11)
+        self.roleControls[role] = control
+    end
 
     local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
         Addon:ImportRaidRoster()
@@ -522,16 +558,14 @@ function UI:CreateRosterPanel(parent)
 
         for index = column.startIndex, column.endIndex do
             local slot = Addon.SLOT_ORDER[index]
-            local rowNumber = index - column.startIndex
-            local y = -69 - (rowNumber * 28)
             local row = {}
-            row.online = CreateText(panel, "GameFontHighlightSmall", "o", "TOPLEFT", panel, "TOPLEFT", column.x, y - 2)
-            row.slot = CreateText(panel, "GameFontHighlightSmall", slot, "TOPLEFT", panel, "TOPLEFT", column.x + 14, y)
+            row.online = CreateText(panel, "GameFontHighlightSmall", "o", "TOPLEFT", panel, "TOPLEFT", 0, 0)
+            row.slot = CreateText(panel, "GameFontHighlightSmall", slot, "TOPLEFT", panel, "TOPLEFT", 0, 0)
             row.slot:SetWidth(64)
             row.name = CreateInput(panel, 150, 20)
-            row.name:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 77, y + 5)
+            row.name:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
             row.spec = CreateSpecSelector(panel, slot)
-            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 241, y + 3)
+            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
 
             local currentSlot = slot
             row.name:SetScript("OnEditFocusLost", function(box)
@@ -578,14 +612,20 @@ function UI:CreateBitesPanel(parent)
         row.source:SetScript("OnEditFocusLost", function(box)
             local edge = Addon.db.bites[currentIndex]
             if edge then
-                edge.source = strupper(Addon:Trim(box:GetText()))
+                local slot = Addon:ResolveSlotLabel(box:GetText(), true)
+                if slot then
+                    edge.source = slot
+                end
             end
             UI:Refresh()
         end)
         row.target:SetScript("OnEditFocusLost", function(box)
             local edge = Addon.db.bites[currentIndex]
             if edge then
-                edge.target = strupper(Addon:Trim(box:GetText()))
+                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
+                if slot then
+                    edge.target = slot
+                end
             end
             UI:Refresh()
         end)
@@ -621,7 +661,10 @@ function UI:CreateCooldownPanel(parent)
             local currentGroup = group
             local currentIndex = index
             row.slot:SetScript("OnEditFocusLost", function(box)
-                Addon.db.cooldowns[currentGroup][currentIndex].slot = strupper(Addon:Trim(box:GetText()))
+                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
+                if slot then
+                    Addon.db.cooldowns[currentGroup][currentIndex].slot = slot
+                end
                 UI:Refresh()
             end)
             tinsert(UI.cooldownRows, row)
@@ -647,11 +690,17 @@ function UI:CreateCooldownPanel(parent)
 
             local currentIndex = index
             row.source:SetScript("OnEditFocusLost", function(box)
-                Addon.db.cooldowns.threat[currentIndex].source = strupper(Addon:Trim(box:GetText()))
+                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
+                if slot then
+                    Addon.db.cooldowns.threat[currentIndex].source = slot
+                end
                 UI:Refresh()
             end)
             row.target:SetScript("OnEditFocusLost", function(box)
-                Addon.db.cooldowns.threat[currentIndex].target = strupper(Addon:Trim(box:GetText()))
+                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
+                if slot then
+                    Addon.db.cooldowns.threat[currentIndex].target = slot
+                end
                 UI:Refresh()
             end)
             tinsert(UI.cooldownRows, row)
@@ -712,19 +761,6 @@ function UI:CreateZonesPanel(parent)
         end
     end
 
-    local function MarkerColor(slot)
-        if slot == "BOSS" then
-            return COLORS.boss
-        elseif string.sub(slot, 1, 4) == "MDPS" then
-            return COLORS.melee
-        elseif string.sub(slot, 1, 4) == "RDPS" then
-            return COLORS.ranged
-        elseif string.sub(slot, 1, 6) == "HEALER" then
-            return COLORS.healers
-        end
-        return COLORS.neutral
-    end
-
     for _, definition in ipairs(ZONE_MARKERS) do
         local marker = CreateFrame("Frame", nil, map)
         marker:SetWidth((definition.span * cellWidth) - 2)
@@ -737,7 +773,7 @@ function UI:CreateZonesPanel(parent)
             -3 - ((definition.row - 1) * cellHeight)
         )
         marker:SetFrameLevel(map:GetFrameLevel() + 5)
-        local color = MarkerColor(definition.slot)
+        local color = GetSlotRoleColor(definition.slot)
         marker:SetBackdrop({
             bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -757,7 +793,7 @@ function UI:CreateZonesPanel(parent)
         local currentSlot = definition.slot
         marker:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(currentSlot == "BOSS" and "BQL" or currentSlot)
+            GameTooltip:SetText(currentSlot == "BOSS" and "BQL" or Addon:GetSlotLabel(currentSlot))
             if currentSlot ~= "BOSS" then
                 GameTooltip:AddLine(Addon:GetSlotName(currentSlot), 1, 1, 1)
             end
@@ -890,15 +926,72 @@ function UI:RefreshRoster()
     end
 
     local raidNames = self:GetRaidNameSet()
+    local activeSlots = Addon:GetActiveSlotOrder()
     for _, slot in ipairs(Addon.SLOT_ORDER) do
+        local row = self.rosterRows[slot]
+        row.online:Hide()
+        row.slot:Hide()
+        row.name:Hide()
+        row.spec:Hide()
+    end
+
+    for index, slot in ipairs(activeSlots) do
         local record = Addon.db.roster[slot]
         local row = self.rosterRows[slot]
+        local columnX
+        local rowNumber
+        if index <= 13 then
+            columnX = 16
+            rowNumber = index - 1
+        else
+            columnX = 408
+            rowNumber = index - 14
+        end
+        local y = -69 - (rowNumber * 28)
+
+        row.online:ClearAllPoints()
+        row.online:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX, y - 2)
+        row.slot:ClearAllPoints()
+        row.slot:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 14, y)
+        row.name:ClearAllPoints()
+        row.name:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 77, y + 5)
+        row.spec:ClearAllPoints()
+        row.spec:SetPoint("TOPLEFT", self.panels.roster, "TOPLEFT", columnX + 241, y + 3)
+
+        row.online:Show()
+        row.slot:Show()
+        row.name:Show()
+        row.spec:Show()
+        row.slot:SetText(Addon:GetSlotLabel(slot))
         SetInputText(row.name, record.name)
         self:SetSpecSelectorValue(row.spec, record.spec)
         if raidNames[Addon:NormalizeName(record.name)] then
             row.online:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
         else
             row.online:SetTextColor(0.35, 0.35, 0.40)
+        end
+    end
+
+    local counts = Addon:GetRoleCounts()
+    local total = #activeSlots
+    self.rosterTotal:SetText(tostring(total) .. "/" .. tostring(Addon.MAX_ROSTER_SIZE))
+    for _, role in ipairs(Addon.ROLE_ORDER) do
+        local control = self.roleControls[role]
+        local count = counts[role] or 0
+        control.count:SetText(tostring(count))
+
+        local minimum = Addon.ROLE_MINIMUMS[role] or 0
+        if count <= minimum then
+            control.remove:Disable()
+        else
+            control.remove:Enable()
+        end
+
+        local maximum = Addon.ROLE_MAXIMUMS[role]
+        if total >= Addon.MAX_ROSTER_SIZE or (maximum and count >= maximum) then
+            control.add:Disable()
+        else
+            control.add:Enable()
         end
     end
 end
@@ -912,8 +1005,8 @@ function UI:RefreshBites()
         local edge = Addon.db.bites[index]
         if edge then
             row.wave:SetText(tostring(edge.wave))
-            SetInputText(row.source, edge.source)
-            SetInputText(row.target, edge.target)
+            SetInputText(row.source, Addon:GetSlotLabel(edge.source))
+            SetInputText(row.target, Addon:GetSlotLabel(edge.target))
             row.sourceName:SetText(Addon:GetSlotName(edge.source))
             row.targetName:SetText(Addon:GetSlotName(edge.target))
             if Addon.state.completed[index] then
@@ -939,11 +1032,11 @@ function UI:RefreshCooldowns()
         local record = Addon.db.cooldowns[row.group][row.index]
         row.label:SetText(record.label or "")
         if row.group == "threat" then
-            SetInputText(row.source, record.source)
-            SetInputText(row.target, record.target)
+            SetInputText(row.source, Addon:GetSlotLabel(record.source))
+            SetInputText(row.target, Addon:GetSlotLabel(record.target))
             row.name:SetText(Addon:GetSlotName(record.source) .. " > " .. Addon:GetSlotName(record.target))
         else
-            SetInputText(row.slot, record.slot)
+            SetInputText(row.slot, Addon:GetSlotLabel(record.slot))
             row.name:SetText(Addon:GetSlotName(record.slot))
         end
     end
@@ -958,11 +1051,18 @@ function UI:RefreshZones()
         SetInputText(input, Addon.db.zones[key])
     end
     for slot, marker in pairs(self.mapMarkers) do
-        local name = slot == "BOSS" and "BQL" or Addon:GetSlotName(slot)
-        if string.len(name) > marker.maxChars then
-            name = string.sub(name, 1, marker.maxChars - 1) .. "."
+        if slot == "BOSS" or Addon:IsSlotActive(slot) then
+            marker:Show()
+            local name = slot == "BOSS" and "BQL" or Addon:GetSlotName(slot)
+            if string.len(name) > marker.maxChars then
+                name = string.sub(name, 1, marker.maxChars - 1) .. "."
+            end
+            marker.label:SetText(name)
+            local color = GetSlotRoleColor(slot)
+            marker:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+        else
+            marker:Hide()
         end
-        marker.label:SetText(name)
     end
 end
 

@@ -2,8 +2,8 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.2.0"
-Addon.DB_VERSION = 2
+Addon.VERSION = "1.3.0"
+Addon.DB_VERSION = 3
 Addon.MESSAGE_PREFIX = "BQLM1"
 
 Addon.SLOT_ORDER = {
@@ -17,6 +17,15 @@ Addon.SLOT_SET = {}
 for _, slot in ipairs(Addon.SLOT_ORDER) do
     Addon.SLOT_SET[slot] = true
 end
+
+Addon.ROLE_ORDER = { "TANK", "MDPS", "RDPS", "HEALER" }
+Addon.ROLE_SET = {}
+for _, role in ipairs(Addon.ROLE_ORDER) do
+    Addon.ROLE_SET[role] = true
+end
+Addon.ROLE_MINIMUMS = { HEALER = 1 }
+Addon.ROLE_MAXIMUMS = { TANK = 2 }
+Addon.MAX_ROSTER_SIZE = 25
 
 Addon.CLASS_ORDER = {
     "DEATHKNIGHT", "DRUID", "HUNTER", "MAGE", "PALADIN",

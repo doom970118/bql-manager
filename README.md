@@ -6,6 +6,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 
 - Plantilla editable de 25 puestos: 2 tanques, 8 melee, 10 ranged y 5 healers.
 - Selector con iconos para las 30 especializaciones de WotLK, filtradas según el puesto TANK, MDPS, RDPS o HEALER.
+- Composición flexible con controles para quitar y añadir funciones, máximo dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
@@ -40,5 +41,7 @@ La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asig
 ## Uso recomendado
 
 Antes del pull, completa los nombres genéricos que queden en la pestaña `Plantilla`, pulsa `Validar` y luego `Sincronizar`. Al iniciar el intento, usa `Iniciar`. El addon anuncia la ronda actual y susurra a cada mordedor su objetivo. El seguimiento automático usa los hechizos de WotLK 3.3.5a: Mordedura vampírica (71726), Esencia de la Reina de Sangre (70867 y variantes) y Sed de sangre frenética (70877).
+
+La cabecera de `Plantilla` permite quitar (`-`) y añadir (`+`) puestos por función. Con la plantilla en 25/25, quita primero el puesto que sobra y luego añade el nuevo rol. No se puede retirar un puesto que todavía esté usado en mordidas o cooldowns; hay que reasignarlo antes. La composición admite como máximo dos tanques y siempre conserva al menos un healer.
 
 Los anuncios a `RAID_WARNING` requieren ser líder o asistente. Si no lo eres, el addon usa el canal de banda normal.

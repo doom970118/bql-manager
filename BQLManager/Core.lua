@@ -81,7 +81,83 @@ function Addon:GetSlotRole(slot)
     if not self.SLOT_SET[slot] then
         return nil
     end
+
+    local record = self.db and self.db.roster and self.db.roster[slot]
+    if record and record.role ~= nil then
+        local role = strupper(self:Trim(record.role))
+        return self.ROLE_SET[role] and role or nil
+    end
     return string.match(slot, "^([A-Z]+)")
+end
+
+function Addon:IsSlotActive(slot)
+    return self.SLOT_SET[slot] and self:GetSlotRole(slot) ~= nil
+end
+
+function Addon:GetActiveSlotOrder()
+    local result = {}
+    for _, role in ipairs(self.ROLE_ORDER) do
+        for _, slot in ipairs(self.SLOT_ORDER) do
+            if self:GetSlotRole(slot) == role then
+                tinsert(result, slot)
+            end
+        end
+    end
+    return result
+end
+
+function Addon:GetRoleCounts()
+    local counts = { TANK = 0, MDPS = 0, RDPS = 0, HEALER = 0 }
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        local role = self:GetSlotRole(slot)
+        if role then
+            counts[role] = counts[role] + 1
+        end
+    end
+    return counts
+end
+
+function Addon:GetActiveRosterSize()
+    return #self:GetActiveSlotOrder()
+end
+
+function Addon:GetSlotLabel(slot)
+    if slot == "BOSS" then
+        return "BOSS"
+    end
+
+    local role = self:GetSlotRole(slot)
+    if not role then
+        return tostring(slot or "?")
+    end
+
+    local number = 0
+    for _, activeSlot in ipairs(self:GetActiveSlotOrder()) do
+        if self:GetSlotRole(activeSlot) == role then
+            number = number + 1
+        end
+        if activeSlot == slot then
+            return role .. tostring(number)
+        end
+    end
+    return tostring(slot or "?")
+end
+
+function Addon:ResolveSlotLabel(value, allowBoss)
+    local normalized = strupper(self:Trim(value))
+    if allowBoss and normalized == "BOSS" then
+        return "BOSS"
+    end
+
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
+        if self:GetSlotLabel(slot) == normalized then
+            return slot
+        end
+    end
+    if self:IsSlotActive(normalized) then
+        return normalized
+    end
+    return nil
 end
 
 function Addon:IsSpecAllowedForSlot(slot, specId)
@@ -106,13 +182,38 @@ end
 
 function Addon:IsPlaceholder(slot, name)
     name = self:Trim(name)
-    return name == "" or strupper(name) == strupper(slot or "")
+    return name == ""
+        or strupper(name) == strupper(slot or "")
+        or strupper(name) == self:GetSlotLabel(slot)
 end
 
 function Addon:Print(message)
     local text = "|cffc94cffBQL Manager:|r " .. tostring(message or "")
     if DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage(text)
+    end
+end
+
+function Addon:NormalizeRosterRole(value, slot)
+    if value == nil then
+        local inferred = string.match(tostring(slot or ""), "^([A-Z]+)")
+        return self.ROLE_SET[inferred] and inferred or nil
+    end
+
+    local role = strupper(self:Trim(value))
+    return self.ROLE_SET[role] and role or nil
+end
+
+function Addon:PrepareRoster()
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        local record = self.db.roster[slot]
+        record.role = self:NormalizeRosterRole(record.role, slot) or ""
+    end
+
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        local record = self.db.roster[slot]
+        local specId = self:NormalizeSpecId(record.spec)
+        record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     end
 end
 
@@ -124,17 +225,14 @@ function Addon:InitializeDatabase()
     end
 
     self.db = _G.BQLManagerDB
-    for _, slot in ipairs(self.SLOT_ORDER) do
-        local record = self.db.roster[slot]
-        local specId = self:NormalizeSpecId(record.spec)
-        record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
-    end
+    self:PrepareRoster()
     self.db.version = self.DB_VERSION
 end
 
 function Addon:ResetDatabase()
     _G.BQLManagerDB = DeepCopy(self.DEFAULTS)
     self.db = _G.BQLManagerDB
+    self:PrepareRoster()
     self:ResetEncounter(false)
     self:RefreshUI()
     self:Print("Configuración inicial restaurada.")
@@ -164,8 +262,8 @@ function Addon:GetSlotName(slot)
     end
 
     local name = self:Trim(record.name)
-    if name == "" then
-        return slot
+    if self:IsPlaceholder(slot, name) then
+        return self:GetSlotLabel(slot)
     end
     return name
 end
@@ -176,7 +274,7 @@ function Addon:GetSlotForName(name)
         return nil
     end
 
-    for _, slot in ipairs(self.SLOT_ORDER) do
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
         local record = self.db.roster[slot]
         if record and self:NormalizeName(record.name) == normalized then
             return slot
@@ -189,7 +287,7 @@ function Addon:GetSlotDisplay(slot)
     if slot == "BOSS" then
         return "BQL"
     end
-    return tostring(slot or "?") .. " · " .. self:GetSlotName(slot)
+    return self:GetSlotLabel(slot) .. " · " .. self:GetSlotName(slot)
 end
 
 function Addon:SetRosterValue(slot, field, value)
@@ -215,6 +313,99 @@ function Addon:SetRosterSpec(slot, specId)
     end
 
     self.db.roster[slot].spec = normalized
+    self:RefreshUI()
+    return true
+end
+
+function Addon:GetSlotReference(slot)
+    for index, edge in ipairs(self.db.bites) do
+        if edge.source == slot or edge.target == slot then
+            return "mordidas (fila " .. tostring(index) .. ")"
+        end
+    end
+
+    for group, records in pairs(self.db.cooldowns) do
+        for index, record in ipairs(records) do
+            if record.slot == slot or record.source == slot or record.target == slot then
+                return "cooldowns (" .. tostring(group) .. " " .. tostring(index) .. ")"
+            end
+        end
+    end
+    return nil
+end
+
+function Addon:AddRosterRole(role)
+    role = strupper(self:Trim(role))
+    if not self.ROLE_SET[role] then
+        return false
+    end
+
+    local counts = self:GetRoleCounts()
+    local maximum = self.ROLE_MAXIMUMS[role]
+    if maximum and counts[role] >= maximum then
+        self:Print(role .. " admite como máximo " .. tostring(maximum) .. " puestos.")
+        return false
+    end
+    if self:GetActiveRosterSize() >= self.MAX_ROSTER_SIZE then
+        self:Print("La plantilla ya tiene " .. tostring(self.MAX_ROSTER_SIZE) .. " puestos. Quita uno antes de añadir otro.")
+        return false
+    end
+
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        if not self:IsSlotActive(slot) then
+            local record = self.db.roster[slot]
+            local wasPlaceholder = self:IsPlaceholder(slot, record.name)
+            record.role = role
+            record.spec = ""
+            if wasPlaceholder then
+                record.name = self:GetSlotLabel(slot)
+            end
+            self:Print("Puesto " .. self:GetSlotLabel(slot) .. " añadido. Selecciona una especialización compatible.")
+            self:RefreshUI()
+            return true
+        end
+    end
+    return false
+end
+
+function Addon:RemoveRosterRole(role)
+    role = strupper(self:Trim(role))
+    if not self.ROLE_SET[role] then
+        return false
+    end
+
+    local counts = self:GetRoleCounts()
+    local minimum = self.ROLE_MINIMUMS[role] or 0
+    if counts[role] <= minimum then
+        self:Print(role .. " debe conservar al menos " .. tostring(minimum) .. " puesto(s).")
+        return false
+    end
+
+    local slot
+    for _, candidate in ipairs(self.SLOT_ORDER) do
+        if self:GetSlotRole(candidate) == role then
+            slot = candidate
+        end
+    end
+    if not slot then
+        return false
+    end
+
+    local reference = self:GetSlotReference(slot)
+    if reference then
+        self:Print("No se puede quitar " .. self:GetSlotLabel(slot) .. " porque todavía se usa en " .. reference .. ".")
+        return false
+    end
+
+    local oldLabel = self:GetSlotLabel(slot)
+    local record = self.db.roster[slot]
+    local wasPlaceholder = self:IsPlaceholder(slot, record.name)
+    record.role = ""
+    record.spec = ""
+    if wasPlaceholder then
+        record.name = slot
+    end
+    self:Print(oldLabel .. " retirado. Su posición queda disponible para otro rol.")
     self:RefreshUI()
     return true
 end
@@ -598,23 +789,35 @@ function Addon:GetValidationIssues()
         tinsert(issues, text)
     end
 
+    local activeSlots = self:GetActiveSlotOrder()
+    if #activeSlots ~= self.MAX_ROSTER_SIZE then
+        AddIssue("La plantilla tiene " .. tostring(#activeSlots) .. " de " .. tostring(self.MAX_ROSTER_SIZE) .. " puestos activos.")
+    end
+    local roleCounts = self:GetRoleCounts()
+    if roleCounts.TANK > (self.ROLE_MAXIMUMS.TANK or 2) then
+        AddIssue("La plantilla no puede tener más de dos tanques.")
+    end
+    if roleCounts.HEALER < (self.ROLE_MINIMUMS.HEALER or 1) then
+        AddIssue("La plantilla debe conservar al menos un healer.")
+    end
+
     local names = {}
-    for _, slot in ipairs(self.SLOT_ORDER) do
+    for _, slot in ipairs(activeSlots) do
         local record = self.db.roster[slot]
         local name = record and self:Trim(record.name) or ""
         if not record or not self:GetSpecDefinition(record.spec) then
-            AddIssue(slot .. " no tiene una especialización válida seleccionada.")
+            AddIssue(self:GetSlotLabel(slot) .. " no tiene una especialización válida seleccionada.")
         elseif not self:IsSpecAllowedForSlot(slot, record.spec) then
-            AddIssue(slot .. " tiene una especialización incompatible con su función.")
+            AddIssue(self:GetSlotLabel(slot) .. " tiene una especialización incompatible con su función.")
         end
         if self:IsPlaceholder(slot, name) then
-            AddIssue(slot .. " no tiene un personaje asignado.")
+            AddIssue(self:GetSlotLabel(slot) .. " no tiene un personaje asignado.")
         else
             local normalized = self:NormalizeName(name)
             if names[normalized] then
-                AddIssue(name .. " está asignado a " .. names[normalized] .. " y " .. slot .. ".")
+                AddIssue(name .. " está asignado a " .. names[normalized] .. " y " .. self:GetSlotLabel(slot) .. ".")
             else
-                names[normalized] = slot
+                names[normalized] = self:GetSlotLabel(slot)
             end
         end
     end
@@ -636,7 +839,7 @@ function Addon:GetValidationIssues()
                     AddIssue("La primera mordida debe salir de BOSS.")
                 end
             else
-                if not self.SLOT_SET[edge.source] then
+                if not self:IsSlotActive(edge.source) then
                     AddIssue("Origen de mordida inválido: " .. tostring(edge.source) .. ".")
                 elseif not infected[edge.source] then
                     AddIssue(edge.source .. " muerde en la ronda " .. wave .. " sin haber sido mordido antes.")
@@ -647,7 +850,7 @@ function Addon:GetValidationIssues()
                 sources[edge.source] = true
             end
 
-            if not self.SLOT_SET[edge.target] then
+            if not self:IsSlotActive(edge.target) then
                 AddIssue("Destino de mordida inválido: " .. tostring(edge.target) .. ".")
             else
                 if infected[edge.target] then
@@ -668,13 +871,13 @@ function Addon:GetValidationIssues()
     for group, records in pairs(self.db.cooldowns) do
         for _, record in ipairs(records) do
             if group == "threat" then
-                if not self.SLOT_SET[record.source] then
+                if not self:IsSlotActive(record.source) then
                     AddIssue("Origen inválido en MD/Tricks: " .. tostring(record.source) .. ".")
                 end
-                if not self.SLOT_SET[record.target] then
+                if not self:IsSlotActive(record.target) then
                     AddIssue("Destino inválido en MD/Tricks: " .. tostring(record.target) .. ".")
                 end
-            elseif not self.SLOT_SET[record.slot] then
+            elseif not self:IsSlotActive(record.slot) then
                 AddIssue("Puesto inválido en " .. tostring(record.label) .. ": " .. tostring(record.slot) .. ".")
             end
         end
@@ -735,7 +938,7 @@ function Addon:ImportRaidRoster()
 
     local nextMember = 1
     local changed = 0
-    for _, slot in ipairs(self.SLOT_ORDER) do
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
         local record = self.db.roster[slot]
         if self:IsPlaceholder(slot, record.name) then
             local member
@@ -834,7 +1037,7 @@ function Addon:SyncConfiguration()
     self:QueueSync({ "BEGIN", self.DB_VERSION }, channel)
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
-        self:QueueSync({ "ROSTER", slot, record.name, record.spec }, channel)
+        self:QueueSync({ "ROSTER", slot, record.name, record.spec, record.role or "" }, channel)
     end
     for index, edge in ipairs(self.db.bites) do
         self:QueueSync({ "BITE", index, edge.wave, edge.source, edge.target }, channel)
@@ -868,17 +1071,25 @@ function Addon:ReceiveSync(message, sender)
     local kind = fields[1]
     if kind == "BEGIN" then
         self.receivingSync = sender
+        self.receivingSyncVersion = tonumber(fields[2]) or 1
     elseif kind == "END" then
         if self.receivingSync then
             self:Print("Configuración recibida de " .. tostring(sender) .. ".")
             self.receivingSync = nil
+            self.receivingSyncVersion = nil
             self:RefreshUI()
         end
     elseif kind == "ROSTER" and self.SLOT_SET[fields[2]] then
         local slot = fields[2]
+        local record = self.db.roster[slot]
+        record.name = fields[3] or ""
+        if fields[5] ~= nil then
+            record.role = self:NormalizeRosterRole(fields[5], slot) or ""
+        elseif (self.receivingSyncVersion or 1) < 3 then
+            record.role = self:NormalizeRosterRole(nil, slot) or ""
+        end
         local specId = self:NormalizeSpecId(fields[4])
-        self.db.roster[slot].name = fields[3] or ""
-        self.db.roster[slot].spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
+        record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     elseif kind == "BITE" then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
