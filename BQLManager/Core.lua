@@ -35,6 +35,8 @@ Addon.pendingInspect = nil
 Addon.autoSyncPending = false
 Addon.autoSyncElapsed = 0
 Addon.AUTO_SYNC_DELAY = 1.0
+Addon.syncSequence = 0
+Addon.syncReport = nil
 
 local function DeepCopy(value)
     if type(value) ~= "table" then
@@ -1107,7 +1109,8 @@ function Addon:ProcessMessageQueue(elapsed)
         end
     elseif item.kind == "ADDON" then
         if SendAddonMessage and item.channel then
-            SendAddonMessage(self.MESSAGE_PREFIX, item.message, item.channel, item.target)
+            local target = item.target or (UnitName and UnitName("player")) or ""
+            SendAddonMessage(self.MESSAGE_PREFIX, item.message, item.channel, target)
         end
     end
 end
@@ -2001,6 +2004,80 @@ function Addon:QueueSync(fields, channel, category)
     self:EnqueueAddon(table.concat(encoded, "|"), channel, nil, category)
 end
 
+function Addon:CreateSyncId()
+    self.syncSequence = self.syncSequence + 1
+    local player = UnitName and UnitName("player") or "player"
+    local timestamp = floor(((GetTime and GetTime()) or 0) * 1000)
+    return self:NormalizeName(player) .. "-" .. tostring(timestamp) .. "-" .. tostring(self.syncSequence)
+end
+
+function Addon:RegisterSyncResponse(kind, syncId, sender, version, status)
+    local report = self.syncReport
+    if not report or report.id ~= syncId then
+        return
+    end
+
+    local player = UnitName and UnitName("player") or ""
+    local key = self:NormalizeName(sender)
+    if key == "" or key == self:NormalizeName(player) then
+        return
+    end
+
+    report.present[key] = {
+        name = sender,
+        version = version or "?",
+        status = status or "READY",
+    }
+    if kind == "ACK" then
+        report.acknowledged[key] = true
+    end
+end
+
+function Addon:ProcessSyncReport(elapsed)
+    local report = self.syncReport
+    if not report then
+        return
+    end
+
+    report.elapsed = report.elapsed + elapsed
+    if not report.discoveryReported and report.elapsed >= 2 then
+        report.discoveryReported = true
+        local present = 0
+        local locked = 0
+        for _, peer in pairs(report.present) do
+            present = present + 1
+            if peer.status == "LOCKED" then
+                locked = locked + 1
+            end
+        end
+        if present == 0 then
+            self:Print("Ningún otro jugador con BQLManager respondió. Revisa versión, grupo y Aceptar sincronización.")
+        else
+            local suffix = locked > 0 and ("; " .. tostring(locked) .. " tiene el encuentro activo") or ""
+            self:Print("BQLManager detectado en " .. tostring(present) .. " jugador(es)" .. suffix .. ". Enviando configuración...")
+        end
+    end
+
+    if report.elapsed < 30 then
+        return
+    end
+
+    local present = 0
+    local acknowledged = 0
+    for _ in pairs(report.present) do
+        present = present + 1
+    end
+    for _ in pairs(report.acknowledged) do
+        acknowledged = acknowledged + 1
+    end
+    if acknowledged > 0 then
+        self:Print("Sincronización aplicada y confirmada por " .. tostring(acknowledged) .. " de " .. tostring(present) .. " jugador(es) detectados.")
+    elseif present > 0 then
+        self:Print("Los clientes respondieron, pero ninguno confirmó la configuración completa.")
+    end
+    self.syncReport = nil
+end
+
 function Addon:SyncConfiguration(silent)
     if not self:CanModifyConfiguration(silent) then
         return false
@@ -2021,8 +2098,20 @@ function Addon:SyncConfiguration(silent)
 
     self:CancelAutoSync()
     self:DiscardQueuedConfigurationSync()
+    self.syncReport = nil
+    local syncId = self:CreateSyncId()
+    if not silent then
+        self.syncReport = {
+            id = syncId,
+            elapsed = 0,
+            discoveryReported = false,
+            present = {},
+            acknowledged = {},
+        }
+        self:QueueSync({ "HELLO", syncId }, channel, "CONTROL")
+    end
     local category = "CONFIG"
-    self:QueueSync({ "BEGIN", self.DB_VERSION }, channel, category)
+    self:QueueSync({ "BEGIN", self.DB_VERSION, syncId }, channel, category)
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
         self:QueueSync({ "ROSTER", slot, record.name, record.spec, record.role or "" }, channel, category)
@@ -2041,7 +2130,7 @@ function Addon:SyncConfiguration(silent)
     for _, zoneId in ipairs(self.SLOT_ORDER) do
         self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel, category)
     end
-    self:QueueSync({ "END" }, channel, category)
+    self:QueueSync({ "END", syncId }, channel, category)
     if not silent then
         self:Print("Sincronización encolada para el grupo.")
     end
@@ -2056,31 +2145,66 @@ function Addon:BroadcastState()
     self:QueueSync({ "STATE", self.state.active and 1 or 0, self.state.currentWave }, channel)
 end
 
-function Addon:ReceiveSync(message, sender)
-    if not self.db.options.acceptSync or not self:IsAuthorizedSender(sender) then
+function Addon:ReceiveSync(message, sender, distribution)
+    if distribution and distribution ~= "PARTY" and distribution ~= "RAID" and distribution ~= "BATTLEGROUND" then
         return
     end
 
     local fields = SplitMessage(message)
     local kind = fields[1]
+    local player = UnitName and UnitName("player") or ""
+    if self:NormalizeName(sender) == self:NormalizeName(player) then
+        return
+    end
+    if kind == "PRESENT" or kind == "ACK" then
+        self:RegisterSyncResponse(kind, fields[2], sender, fields[3], fields[4])
+        return
+    end
+    if not self.db.options.acceptSync then
+        if kind == "HELLO" then
+            self:Print("Sincronización ignorada de " .. tostring(sender) .. ": Aceptar sincronización está desactivado.")
+        end
+        return
+    end
+    if not self:IsAuthorizedSender(sender) then
+        if kind == "HELLO" then
+            self:Print("Sincronización ignorada de " .. tostring(sender) .. ": no es líder ni asistente.")
+        end
+        return
+    end
+    if kind == "HELLO" then
+        local channel = distribution or self:GetAddonChannel()
+        if channel then
+            self:QueueSync({ "PRESENT", fields[2], self.VERSION, self:IsConfigurationLocked() and "LOCKED" or "READY" }, channel, "CONTROL")
+        end
+        return
+    end
     local receivingConfiguration = self.receivingSync
         and self:NormalizeName(self.receivingSync) == self:NormalizeName(sender)
     if self.state.active and kind ~= "STATE" then
         self.receivingSync = nil
         self.receivingSyncVersion = nil
+        self.receivingSyncId = nil
         return
     end
     if kind == "BEGIN" then
         self.receivingSync = sender
         self.receivingSyncVersion = tonumber(fields[2]) or 1
+        self.receivingSyncId = fields[3]
     elseif kind == "END" then
         if receivingConfiguration then
+            local completedSyncId = self.receivingSyncId
             self:Print("Configuración recibida de " .. tostring(sender) .. ".")
             self.receivingSync = nil
             self.receivingSyncVersion = nil
+            self.receivingSyncId = nil
             self:PrepareZoneAssignments()
             self:RebuildBiteSources()
             self:RefreshUI()
+            local channel = distribution or self:GetAddonChannel()
+            if channel and completedSyncId and completedSyncId == fields[2] then
+                self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }, channel, "CONTROL")
+            end
         end
     elseif kind == "ROSTER" and receivingConfiguration and self.SLOT_SET[fields[2]] then
         local slot = fields[2]
@@ -2128,6 +2252,7 @@ function Addon:ReceiveSync(message, sender)
             self:DiscardQueuedConfigurationSync()
             self.receivingSync = nil
             self.receivingSyncVersion = nil
+            self.receivingSyncId = nil
         end
         self:RefreshUI()
     end
@@ -2214,7 +2339,7 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         if prefix == Addon.MESSAGE_PREFIX then
-            Addon:ReceiveSync(message, sender)
+            Addon:ReceiveSync(message, sender, channel)
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
         if Addon.db and Addon.db.options.autoStart and not Addon.state.active and Addon:IsBossName(UnitName("target")) then
@@ -2239,4 +2364,5 @@ Addon.eventFrame:SetScript("OnUpdate", function(_, elapsed)
     Addon:ProcessMessageQueue(elapsed)
     Addon:ProcessInspectQueue(elapsed)
     Addon:ProcessAutoSync(elapsed)
+    Addon:ProcessSyncReport(elapsed)
 end)
