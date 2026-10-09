@@ -38,6 +38,9 @@ def main() -> None:
     assert role_map["SHAMAN_ENHANCEMENT"] == {"MDPS"}
     assert role_map["SHAMAN_RESTORATION"] == {"HEALER"}
     assert role_map["DRUID_FERAL"] == {"TANK", "MDPS"}
+    assert role_map["DEATHKNIGHT_BLOOD"] == {"TANK"}
+    assert role_map["DEATHKNIGHT_FROST"] == {"TANK", "MDPS"}
+    assert role_map["DEATHKNIGHT_UNHOLY"] == {"TANK", "MDPS"}
     assert len(legacy_specs) == 16
     assert set(legacy_specs) <= spec_ids
 

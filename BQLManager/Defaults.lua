@@ -28,8 +28,8 @@ Addon.CLASSES = {
         name = "Caballero de la Muerte",
         specs = {
             { id = "DEATHKNIGHT_BLOOD", name = "Sangre", icon = "Interface\\Icons\\Spell_Deathknight_BloodPresence", roles = { TANK = true } },
-            { id = "DEATHKNIGHT_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence", roles = { MDPS = true } },
-            { id = "DEATHKNIGHT_UNHOLY", name = "Profano", icon = "Interface\\Icons\\Spell_Deathknight_UnholyPresence", roles = { MDPS = true } },
+            { id = "DEATHKNIGHT_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence", roles = { TANK = true, MDPS = true } },
+            { id = "DEATHKNIGHT_UNHOLY", name = "Profano", icon = "Interface\\Icons\\Spell_Deathknight_UnholyPresence", roles = { TANK = true, MDPS = true } },
         },
     },
     DRUID = {
