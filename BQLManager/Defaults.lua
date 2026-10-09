@@ -2,8 +2,8 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.1.0"
-Addon.DB_VERSION = 1
+Addon.VERSION = "1.2.0"
+Addon.DB_VERSION = 2
 Addon.MESSAGE_PREFIX = "BQLM1"
 
 Addon.SLOT_ORDER = {
@@ -17,6 +17,122 @@ Addon.SLOT_SET = {}
 for _, slot in ipairs(Addon.SLOT_ORDER) do
     Addon.SLOT_SET[slot] = true
 end
+
+Addon.CLASS_ORDER = {
+    "DEATHKNIGHT", "DRUID", "HUNTER", "MAGE", "PALADIN",
+    "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
+}
+
+Addon.CLASSES = {
+    DEATHKNIGHT = {
+        name = "Caballero de la Muerte",
+        specs = {
+            { id = "DEATHKNIGHT_BLOOD", name = "Sangre", icon = "Interface\\Icons\\Spell_Deathknight_BloodPresence" },
+            { id = "DEATHKNIGHT_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence" },
+            { id = "DEATHKNIGHT_UNHOLY", name = "Profano", icon = "Interface\\Icons\\Spell_Deathknight_UnholyPresence" },
+        },
+    },
+    DRUID = {
+        name = "Druida",
+        specs = {
+            { id = "DRUID_BALANCE", name = "Equilibrio", icon = "Interface\\Icons\\Spell_Nature_StarFall" },
+            { id = "DRUID_FERAL", name = "Combate feral", icon = "Interface\\Icons\\Ability_Druid_CatForm" },
+            { id = "DRUID_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_HealingTouch" },
+        },
+    },
+    HUNTER = {
+        name = "Cazador",
+        specs = {
+            { id = "HUNTER_BEASTMASTERY", name = "Dominio de bestias", icon = "Interface\\Icons\\Ability_Hunter_BeastTaming" },
+            { id = "HUNTER_MARKSMANSHIP", name = "Puntería", icon = "Interface\\Icons\\Ability_Marksmanship" },
+            { id = "HUNTER_SURVIVAL", name = "Supervivencia", icon = "Interface\\Icons\\Ability_Hunter_SwiftStrike" },
+        },
+    },
+    MAGE = {
+        name = "Mago",
+        specs = {
+            { id = "MAGE_ARCANE", name = "Arcano", icon = "Interface\\Icons\\Spell_Holy_MagicalSentry" },
+            { id = "MAGE_FIRE", name = "Fuego", icon = "Interface\\Icons\\Spell_Fire_FireBolt02" },
+            { id = "MAGE_FROST", name = "Escarcha", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02" },
+        },
+    },
+    PALADIN = {
+        name = "Paladín",
+        specs = {
+            { id = "PALADIN_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt" },
+            { id = "PALADIN_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Spell_Holy_DevotionAura" },
+            { id = "PALADIN_RETRIBUTION", name = "Reprensión", icon = "Interface\\Icons\\Spell_Holy_AuraOfLight" },
+        },
+    },
+    PRIEST = {
+        name = "Sacerdote",
+        specs = {
+            { id = "PRIEST_DISCIPLINE", name = "Disciplina", icon = "Interface\\Icons\\Spell_Holy_PowerWordShield" },
+            { id = "PRIEST_HOLY", name = "Sagrado", icon = "Interface\\Icons\\Spell_Holy_HolyBolt" },
+            { id = "PRIEST_SHADOW", name = "Sombras", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain" },
+        },
+    },
+    ROGUE = {
+        name = "Pícaro",
+        specs = {
+            { id = "ROGUE_ASSASSINATION", name = "Asesinato", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate" },
+            { id = "ROGUE_COMBAT", name = "Combate", icon = "Interface\\Icons\\Ability_BackStab" },
+            { id = "ROGUE_SUBTLETY", name = "Sutileza", icon = "Interface\\Icons\\Ability_Stealth" },
+        },
+    },
+    SHAMAN = {
+        name = "Chamán",
+        specs = {
+            { id = "SHAMAN_ELEMENTAL", name = "Elemental", icon = "Interface\\Icons\\Spell_Nature_Lightning" },
+            { id = "SHAMAN_ENHANCEMENT", name = "Mejora", icon = "Interface\\Icons\\Spell_Nature_LightningShield" },
+            { id = "SHAMAN_RESTORATION", name = "Restauración", icon = "Interface\\Icons\\Spell_Nature_MagicImmunity" },
+        },
+    },
+    WARLOCK = {
+        name = "Brujo",
+        specs = {
+            { id = "WARLOCK_AFFLICTION", name = "Aflicción", icon = "Interface\\Icons\\Spell_Shadow_DeathCoil" },
+            { id = "WARLOCK_DEMONOLOGY", name = "Demonología", icon = "Interface\\Icons\\Spell_Shadow_Metamorphosis" },
+            { id = "WARLOCK_DESTRUCTION", name = "Destrucción", icon = "Interface\\Icons\\Spell_Shadow_RainOfFire" },
+        },
+    },
+    WARRIOR = {
+        name = "Guerrero",
+        specs = {
+            { id = "WARRIOR_ARMS", name = "Armas", icon = "Interface\\Icons\\Ability_Warrior_SavageBlow" },
+            { id = "WARRIOR_FURY", name = "Furia", icon = "Interface\\Icons\\Ability_Warrior_InnerRage" },
+            { id = "WARRIOR_PROTECTION", name = "Protección", icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance" },
+        },
+    },
+}
+
+Addon.SPEC_BY_ID = {}
+for classKey, class in pairs(Addon.CLASSES) do
+    for _, spec in ipairs(class.specs) do
+        spec.classKey = classKey
+        spec.className = class.name
+        Addon.SPEC_BY_ID[spec.id] = spec
+    end
+end
+
+Addon.LEGACY_SPEC_MAP = {
+    BDK = "DEATHKNIGHT_BLOOD",
+    DKUNH = "DEATHKNIGHT_UNHOLY",
+    BOOMIE = "DRUID_BALANCE",
+    CAT = "DRUID_FERAL",
+    HUNTER = "HUNTER_MARKSMANSHIP",
+    FMAGE = "MAGE_FIRE",
+    HPAL = "PALADIN_HOLY",
+    PPAL = "PALADIN_PROTECTION",
+    RETRI = "PALADIN_RETRIBUTION",
+    DISCI = "PRIEST_DISCIPLINE",
+    SPRIEST = "PRIEST_SHADOW",
+    CROGUE = "ROGUE_COMBAT",
+    RSHAMMY = "SHAMAN_RESTORATION",
+    AFFLY = "WARLOCK_AFFLICTION",
+    DEMO = "WARLOCK_DEMONOLOGY",
+    FWAR = "WARRIOR_FURY",
+}
 
 Addon.SPELLS = {
     VAMPIRIC_BITE = {
@@ -58,31 +174,31 @@ Addon.DEFAULTS = {
         height = 560,
     },
     roster = {
-        TANK1 = { name = "Renncor", spec = "BDK" },
-        TANK2 = { name = "Opes", spec = "PPAL" },
-        MDPS1 = { name = "Pulposalsero", spec = "CROGUE" },
-        MDPS2 = { name = "Larslz", spec = "CROGUE" },
-        MDPS3 = { name = "Bebio", spec = "RETRI" },
-        MDPS4 = { name = "MDPS4", spec = "RETRI" },
-        MDPS5 = { name = "Akku", spec = "FWAR" },
-        MDPS6 = { name = "Urukubar", spec = "FWAR" },
-        MDPS7 = { name = "Tachita", spec = "DKUNH" },
-        MDPS8 = { name = "MDPS8", spec = "CAT" },
-        RDPS1 = { name = "Pyroboo", spec = "FMAGE" },
-        RDPS2 = { name = "RDPS2", spec = "FMAGE" },
-        RDPS3 = { name = "Chimichurri", spec = "DEMO" },
-        RDPS4 = { name = "Stephenson", spec = "AFFLY" },
-        RDPS5 = { name = "Izanagixzz", spec = "BOOMIE" },
-        RDPS6 = { name = "Youdud", spec = "BOOMIE" },
-        RDPS7 = { name = "Jatzi", spec = "HUNTER" },
-        RDPS8 = { name = "RDPS8", spec = "HUNTER" },
-        RDPS9 = { name = "Nevado", spec = "SPRIEST" },
-        RDPS10 = { name = "RDPS10", spec = "SPRIEST" },
-        HEALER1 = { name = "Flytergt", spec = "HPAL" },
-        HEALER2 = { name = "HEALER2", spec = "HPAL" },
-        HEALER3 = { name = "Cach", spec = "DISCI" },
-        HEALER4 = { name = "Orcwaldo", spec = "RSHAMMY" },
-        HEALER5 = { name = "Arquicuatro", spec = "RSHAMMY" },
+        TANK1 = { name = "Renncor", spec = "DEATHKNIGHT_BLOOD" },
+        TANK2 = { name = "Opes", spec = "PALADIN_PROTECTION" },
+        MDPS1 = { name = "Pulposalsero", spec = "ROGUE_COMBAT" },
+        MDPS2 = { name = "Larslz", spec = "ROGUE_COMBAT" },
+        MDPS3 = { name = "Bebio", spec = "PALADIN_RETRIBUTION" },
+        MDPS4 = { name = "MDPS4", spec = "PALADIN_RETRIBUTION" },
+        MDPS5 = { name = "Akku", spec = "WARRIOR_FURY" },
+        MDPS6 = { name = "Urukubar", spec = "WARRIOR_FURY" },
+        MDPS7 = { name = "Tachita", spec = "DEATHKNIGHT_UNHOLY" },
+        MDPS8 = { name = "MDPS8", spec = "DRUID_FERAL" },
+        RDPS1 = { name = "Pyroboo", spec = "MAGE_FIRE" },
+        RDPS2 = { name = "RDPS2", spec = "MAGE_FIRE" },
+        RDPS3 = { name = "Chimichurri", spec = "WARLOCK_DEMONOLOGY" },
+        RDPS4 = { name = "Stephenson", spec = "WARLOCK_AFFLICTION" },
+        RDPS5 = { name = "Izanagixzz", spec = "DRUID_BALANCE" },
+        RDPS6 = { name = "Youdud", spec = "DRUID_BALANCE" },
+        RDPS7 = { name = "Jatzi", spec = "HUNTER_MARKSMANSHIP" },
+        RDPS8 = { name = "RDPS8", spec = "HUNTER_MARKSMANSHIP" },
+        RDPS9 = { name = "Nevado", spec = "PRIEST_SHADOW" },
+        RDPS10 = { name = "RDPS10", spec = "PRIEST_SHADOW" },
+        HEALER1 = { name = "Flytergt", spec = "PALADIN_HOLY" },
+        HEALER2 = { name = "HEALER2", spec = "PALADIN_HOLY" },
+        HEALER3 = { name = "Cach", spec = "PRIEST_DISCIPLINE" },
+        HEALER4 = { name = "Orcwaldo", spec = "SHAMAN_RESTORATION" },
+        HEALER5 = { name = "Arquicuatro", spec = "SHAMAN_RESTORATION" },
     },
     bites = {
         { wave = 1, source = "BOSS", target = "RDPS1" },

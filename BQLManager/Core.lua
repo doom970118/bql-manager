@@ -65,6 +65,18 @@ function Addon:NormalizeName(name)
     return strlower(name)
 end
 
+function Addon:NormalizeSpecId(value)
+    local normalized = strupper(self:Trim(value))
+    if self.SPEC_BY_ID[normalized] then
+        return normalized
+    end
+    return self.LEGACY_SPEC_MAP[normalized]
+end
+
+function Addon:GetSpecDefinition(specId)
+    return self.SPEC_BY_ID[self:NormalizeSpecId(specId) or ""]
+end
+
 function Addon:IsPlaceholder(slot, name)
     name = self:Trim(name)
     return name == "" or strupper(name) == strupper(slot or "")
@@ -84,8 +96,12 @@ function Addon:InitializeDatabase()
         MergeDefaults(_G.BQLManagerDB, self.DEFAULTS)
     end
 
-    _G.BQLManagerDB.version = self.DB_VERSION
     self.db = _G.BQLManagerDB
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        local record = self.db.roster[slot]
+        record.spec = self:NormalizeSpecId(record.spec) or ""
+    end
+    self.db.version = self.DB_VERSION
 end
 
 function Addon:ResetDatabase()
@@ -152,12 +168,27 @@ function Addon:SetRosterValue(slot, field, value)
     if not self.SLOT_SET[slot] then
         return
     end
-    if field ~= "name" and field ~= "spec" then
+    if field ~= "name" then
         return
     end
 
     self.db.roster[slot][field] = self:Trim(value)
     self:RefreshUI()
+end
+
+function Addon:SetRosterSpec(slot, specId)
+    if not self.SLOT_SET[slot] then
+        return false
+    end
+
+    local normalized = self:NormalizeSpecId(specId)
+    if not normalized then
+        return false
+    end
+
+    self.db.roster[slot].spec = normalized
+    self:RefreshUI()
+    return true
 end
 
 function Addon:GetWaveEdges(wave)
@@ -543,6 +574,9 @@ function Addon:GetValidationIssues()
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
         local name = record and self:Trim(record.name) or ""
+        if not record or not self:GetSpecDefinition(record.spec) then
+            AddIssue(slot .. " no tiene una especialización válida seleccionada.")
+        end
         if self:IsPlaceholder(slot, name) then
             AddIssue(slot .. " no tiene un personaje asignado.")
         else
@@ -684,9 +718,6 @@ function Addon:ImportRaidRoster()
             end
             if member then
                 record.name = member.name
-                if self:Trim(record.spec) == "" then
-                    record.spec = member.classFile or member.class or ""
-                end
                 used[self:NormalizeName(member.name)] = true
                 changed = changed + 1
             end
@@ -815,7 +846,7 @@ function Addon:ReceiveSync(message, sender)
         end
     elseif kind == "ROSTER" and self.SLOT_SET[fields[2]] then
         self.db.roster[fields[2]].name = fields[3] or ""
-        self.db.roster[fields[2]].spec = fields[4] or ""
+        self.db.roster[fields[2]].spec = self:NormalizeSpecId(fields[4]) or ""
     elseif kind == "BITE" then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then

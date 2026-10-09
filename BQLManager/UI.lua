@@ -12,6 +12,7 @@ local strformat = string.format
 local strupper = string.upper
 local tinsert = table.insert
 local tostring = tostring
+local unpack = unpack
 
 local COLORS = {
     purple = { 0.72, 0.30, 0.95 },
@@ -28,6 +29,20 @@ local COLORS = {
     flames = { 1.00, 0.55, 0.12 },
     boss = { 0.78, 0.05, 0.05 },
     neutral = { 0.22, 0.22, 0.25 },
+}
+
+local CLASS_ICON_TEXTURE = "Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes"
+local CLASS_ICON_TCOORDS = _G.CLASS_ICON_TCOORDS or {
+    WARRIOR = { 0, 0.25, 0, 0.25 },
+    MAGE = { 0.25, 0.49609375, 0, 0.25 },
+    ROGUE = { 0.49609375, 0.7421875, 0, 0.25 },
+    DRUID = { 0.7421875, 0.98828125, 0, 0.25 },
+    HUNTER = { 0, 0.25, 0.25, 0.5 },
+    SHAMAN = { 0.25, 0.49609375, 0.25, 0.5 },
+    PRIEST = { 0.49609375, 0.7421875, 0.25, 0.5 },
+    WARLOCK = { 0.7421875, 0.98828125, 0.25, 0.5 },
+    PALADIN = { 0, 0.25, 0.5, 0.75 },
+    DEATHKNIGHT = { 0.25, 0.49609375, 0.5, 0.75 },
 }
 
 -- Mapa G1:Z14 de la hoja de referencia. Los números conservan las zonas
@@ -128,6 +143,109 @@ local function CreateInput(parent, width, height)
         UI:Refresh()
     end)
     return input
+end
+
+function UI:SetSpecSelectorValue(selector, specId)
+    local spec = Addon:GetSpecDefinition(specId)
+    selector.selectedSpecId = spec and spec.id or nil
+
+    if not spec then
+        selector.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        selector.label:SetText("Seleccionar...")
+        selector.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        return
+    end
+
+    selector.icon:SetTexture(spec.icon)
+    selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    selector.label:SetText(spec.name .. " · " .. spec.className)
+    local color = _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[spec.classKey]
+    if color then
+        selector.label:SetTextColor(color.r, color.g, color.b)
+    else
+        selector.label:SetTextColor(1, 1, 1)
+    end
+end
+
+local function CreateSpecSelector(parent, slot)
+    local selector = CreateFrame("Button", NextName("SpecSelector"), parent)
+    selector:SetWidth(155)
+    selector:SetHeight(22)
+    SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
+
+    selector.icon = selector:CreateTexture(nil, "ARTWORK")
+    selector.icon:SetWidth(18)
+    selector.icon:SetHeight(18)
+    selector.icon:SetPoint("LEFT", selector, "LEFT", 4, 0)
+
+    selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector.icon, "RIGHT", 5, 0)
+    selector.label:SetWidth(112)
+    selector.label:SetJustifyH("LEFT")
+
+    selector.arrow = CreateText(selector, "GameFontNormalSmall", "v", "RIGHT", selector, "RIGHT", -5, 1)
+    selector.arrow:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+
+    selector:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    selector.menu = CreateFrame("Frame", NextName("SpecMenu"), selector, "UIDropDownMenuTemplate")
+    UIDropDownMenu_Initialize(selector.menu, function(_, level, menuList)
+        if level == 1 then
+            for _, classKey in ipairs(Addon.CLASS_ORDER) do
+                local class = Addon.CLASSES[classKey]
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = class.name
+                info.value = classKey
+                info.hasArrow = true
+                info.menuList = classKey
+                info.notCheckable = true
+                info.icon = CLASS_ICON_TEXTURE
+                local coords = CLASS_ICON_TCOORDS[classKey]
+                if coords then
+                    info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        elseif level == 2 and menuList then
+            local class = Addon.CLASSES[menuList]
+            if class then
+                for _, spec in ipairs(class.specs) do
+                    local specId = spec.id
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = spec.name .. " - " .. class.name
+                    info.value = specId
+                    info.icon = spec.icon
+                    info.checked = selector.selectedSpecId == specId
+                    info.func = function()
+                        Addon:SetRosterSpec(slot, specId)
+                        CloseDropDownMenus()
+                    end
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end
+        end
+    end, "MENU")
+
+    selector:SetScript("OnClick", function(self)
+        ToggleDropDownMenu(1, nil, self.menu, self, 0, 0)
+    end)
+    selector:SetScript("OnEnter", function(self)
+        local spec = Addon:GetSpecDefinition(self.selectedSpecId)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if spec then
+            GameTooltip:SetText(spec.name)
+            GameTooltip:AddLine(spec.className, 1, 1, 1)
+        else
+            GameTooltip:SetText("Seleccionar especialización")
+        end
+        GameTooltip:AddLine("Haz clic para elegir una clase y una especialización.", 0.75, 0.75, 0.75, true)
+        GameTooltip:Show()
+    end)
+    selector:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    UI:SetSpecSelectorValue(selector, nil)
+    return selector
 end
 
 local function CreateNoteInput(parent, width, height)
@@ -360,7 +478,7 @@ function UI:CreateRosterPanel(parent)
     self.rosterRows = {}
 
     CreateSectionTitle(panel, "Plantilla de 25 jugadores", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Los nombres genéricos como MDPS4 cuentan como puestos sin asignar.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "El selector evita nombres de especialización inválidos.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
@@ -376,7 +494,7 @@ function UI:CreateRosterPanel(parent)
     for _, column in ipairs(columns) do
         CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", column.x + 14, -47)
         CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", column.x + 83, -47)
-        CreateText(panel, "GameFontNormalSmall", "Spec", "TOPLEFT", panel, "TOPLEFT", column.x + 244, -47)
+        CreateText(panel, "GameFontNormalSmall", "Especialización / clase", "TOPLEFT", panel, "TOPLEFT", column.x + 235, -47)
 
         for index = column.startIndex, column.endIndex do
             local slot = Addon.SLOT_ORDER[index]
@@ -388,15 +506,12 @@ function UI:CreateRosterPanel(parent)
             row.slot:SetWidth(64)
             row.name = CreateInput(panel, 150, 20)
             row.name:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 77, y + 5)
-            row.spec = CreateInput(panel, 82, 20)
-            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 238, y + 5)
+            row.spec = CreateSpecSelector(panel, slot)
+            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 231, y + 4)
 
             local currentSlot = slot
             row.name:SetScript("OnEditFocusLost", function(box)
                 Addon:SetRosterValue(currentSlot, "name", box:GetText())
-            end)
-            row.spec:SetScript("OnEditFocusLost", function(box)
-                Addon:SetRosterValue(currentSlot, "spec", box:GetText())
             end)
             self.rosterRows[slot] = row
         end
@@ -755,7 +870,7 @@ function UI:RefreshRoster()
         local record = Addon.db.roster[slot]
         local row = self.rosterRows[slot]
         SetInputText(row.name, record.name)
-        SetInputText(row.spec, record.spec)
+        self:SetSpecSelectorValue(row.spec, record.spec)
         if raidNames[Addon:NormalizeName(record.name)] then
             row.online:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
         else

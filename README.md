@@ -5,6 +5,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 ## Funciones
 
 - Plantilla editable de 25 puestos: 2 tanques, 8 melee, 10 ranged y 5 healers.
+- Selector validado de clase y especialización con iconos para las 30 especializaciones de WotLK.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
