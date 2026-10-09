@@ -36,6 +36,13 @@ def main() -> None:
     assert "record.name = member.name" in assignment
     assert "record.spec = specId" in assignment
 
+    clear_slot = CORE.split("function Addon:ClearRosterSlot", 1)[1].split(
+        "function Addon:AssignGuildMemberToSlot", 1
+    )[0]
+    assert 'record.name = ""' in clear_slot
+    assert 'record.spec = ""' in clear_slot
+    assert "self:RefreshUI()" in clear_slot
+
     inspection = CORE.split("function Addon:DetectTalentSpec", 1)[1].split(
         "function Addon:ImportRaidRoster", 1
     )[0]
@@ -62,6 +69,8 @@ def main() -> None:
     assert 'SetScript("OnMouseWheel"' in selector
     assert "Addon:GetGuildMemberCandidates" in selector
     assert "Addon:AssignGuildMemberToSlot" in selector
+    assert '"Dejar puesto vacío"' in selector
+    assert "Addon:ClearRosterSlot(selector.slot)" in selector
     assert "CLASS_ICON_TEXTURE" in UI
     assert "CLASS_ICON_TCOORDS" in UI
     assert "member.online and 1 or 0.55" in UI

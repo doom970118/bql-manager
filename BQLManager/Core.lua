@@ -683,6 +683,18 @@ function Addon:SetRosterValue(slot, field, value)
     self:RefreshUI()
 end
 
+function Addon:ClearRosterSlot(slot)
+    if not self:IsSlotActive(slot) then
+        return false
+    end
+
+    local record = self.db.roster[slot]
+    record.name = ""
+    record.spec = ""
+    self:RefreshUI()
+    return true
+end
+
 function Addon:AssignGuildMemberToSlot(slot, name)
     if not self:IsSlotActive(slot) then
         return false
