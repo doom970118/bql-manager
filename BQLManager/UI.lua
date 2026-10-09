@@ -231,10 +231,13 @@ local function CreateSpecSelector(parent, slot)
                     if Addon:IsSpecAllowedForSlot(slot, spec.id) then
                         local specId = spec.id
                         local info = UIDropDownMenu_CreateInfo()
-                        info.text = spec.name .. " - " .. class.name
+                        info.text = "      "
                         info.value = specId
                         info.icon = spec.icon
-                        info.checked = selector.selectedSpecId == specId
+                        info.notCheckable = true
+                        info.tooltipTitle = spec.name
+                        info.tooltipText = class.name
+                        info.tooltipOnButton = true
                         info.func = function()
                             Addon:SetRosterSpec(slot, specId)
                             CloseDropDownMenus()

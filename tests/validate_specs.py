@@ -59,6 +59,10 @@ def main() -> None:
     assert "Addon:IsSpecAllowedForSlot(slot, spec.id)" in UI
     assert 'info.text = "            "' in UI
     assert "info.tooltipTitle = class.name" in UI
+    assert 'info.text = "      "' in UI
+    assert "info.tooltipTitle = spec.name" in UI
+    assert 'info.text = spec.name .. " - " .. class.name' not in UI
+    assert "info.checked = selector.selectedSpecId == specId" not in UI
     assert "row.spec = CreateSpecSelector(panel, slot)" in UI
     assert 'SetRosterValue(currentSlot, "spec"' not in UI
     assert "selector:SetWidth(24)" in UI
