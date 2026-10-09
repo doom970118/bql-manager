@@ -169,9 +169,14 @@ function UI:SetGuildMemberSelectorValue(selector, name)
         return
     end
 
+    local displayName = name
+    if Addon:IsPlaceholder(selector.slot, name) then
+        displayName = Addon:GetSlotLabel(selector.slot)
+    end
+
     if not selector.editBox:HasFocus() then
         selector.suppressSearch = true
-        selector.editBox:SetText(tostring(name or ""))
+        selector.editBox:SetText(tostring(displayName or ""))
         selector.suppressSearch = false
     end
 
