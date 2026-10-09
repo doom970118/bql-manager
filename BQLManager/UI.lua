@@ -287,6 +287,92 @@ local function CreateSpecSelector(parent, slot)
     return selector
 end
 
+function UI:SetRosterSlotSelectorValue(selector, slot)
+    selector.value = slot
+    if slot == "BOSS" then
+        selector.label:SetText("BOSS")
+        selector.label:SetTextColor(COLORS.boss[1], COLORS.boss[2], COLORS.boss[3])
+        selector:SetBackdropBorderColor(COLORS.boss[1], COLORS.boss[2], COLORS.boss[3], 1)
+        return
+    end
+
+    if Addon:IsSlotActive(slot) then
+        selector.label:SetText(Addon:GetSlotLabel(slot))
+        local color = GetSlotRoleColor(slot)
+        selector.label:SetTextColor(color[1], color[2], color[3])
+        selector:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+    else
+        selector.label:SetText("Seleccionar...")
+        selector.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
+    end
+end
+
+local function CreateRosterSlotSelector(parent, width, callback, lockedValue)
+    local selector = CreateFrame("Button", NextName("SlotSelector"), parent)
+    selector:SetWidth(width or 94)
+    selector:SetHeight(20)
+    SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
+
+    selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector, "LEFT", 6, 0)
+    selector.label:SetWidth((width or 94) - 24)
+    selector.label:SetJustifyH("LEFT")
+    selector.arrow = CreateText(selector, "GameFontNormalSmall", "v", "RIGHT", selector, "RIGHT", -6, 1)
+    selector.arrow:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+    selector:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+
+    if lockedValue then
+        selector.locked = true
+        selector.arrow:Hide()
+        selector:Disable()
+    else
+        selector.menu = CreateFrame("Frame", NextName("SlotMenu"), selector, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(selector.menu, function(_, level)
+            if level ~= 1 then
+                return
+            end
+            for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
+                local currentSlot = slot
+                local record = Addon:GetSlotRecord(slot)
+                local spec = record and Addon:GetSpecDefinition(record.spec)
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
+                info.value = slot
+                info.notCheckable = true
+                info.icon = spec and spec.icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+                info.func = function()
+                    callback(currentSlot)
+                    CloseDropDownMenus()
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end, "MENU")
+        selector:SetScript("OnClick", function(self)
+            ToggleDropDownMenu(1, nil, self.menu, self, 0, 0)
+        end)
+    end
+
+    selector:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if self.value == "BOSS" then
+            GameTooltip:SetText("BOSS")
+            GameTooltip:AddLine("Origen fijo de la primera mordida.", 1, 1, 1)
+        elseif Addon:IsSlotActive(self.value) then
+            GameTooltip:SetText(Addon:GetSlotLabel(self.value))
+            GameTooltip:AddLine(Addon:GetSlotName(self.value), 1, 1, 1)
+        else
+            GameTooltip:SetText("Seleccionar puesto")
+        end
+        GameTooltip:Show()
+    end)
+    selector:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    UI:SetRosterSlotSelectorValue(selector, lockedValue)
+    return selector
+end
+
 local function CreateNoteInput(parent, width, height)
     local input = CreateFrame("EditBox", NextName("Note"), parent)
     input:SetWidth(width)
@@ -582,7 +668,7 @@ function UI:CreateBitesPanel(parent)
     self.biteRows = {}
 
     CreateSectionTitle(panel, "Árbol editable de mordidas", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Usa puestos, no nombres. La primera fuente debe ser BOSS.", "TOPLEFT", panel, "TOPLEFT", 270, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Selecciona puestos activos. El origen de la primera mordida es BOSS y está bloqueado.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     CreateText(panel, "GameFontNormalSmall", "Ronda", "TOPLEFT", panel, "TOPLEFT", 18, -48)
@@ -594,41 +680,24 @@ function UI:CreateBitesPanel(parent)
     for index = 1, 16 do
         local y = -70 - ((index - 1) * 23)
         local row = {}
+        local currentIndex = index
         row.state = CreateText(panel, "GameFontHighlightSmall", "-", "TOPLEFT", panel, "TOPLEFT", 18, y)
         row.wave = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 43, y)
         row.wave:SetWidth(30)
-        row.source = CreateInput(panel, 94, 19)
-        row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", 78, y + 5)
+        row.source = CreateRosterSlotSelector(panel, 94, function(slot)
+            Addon:SetBiteSlot(currentIndex, "source", slot)
+        end, index == 1 and "BOSS" or nil)
+        row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", 78, y + 4)
         row.sourceName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 190, y)
         row.sourceName:SetWidth(180)
         row.sourceName:SetJustifyH("LEFT")
-        row.target = CreateInput(panel, 94, 19)
-        row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", 386, y + 5)
+        row.target = CreateRosterSlotSelector(panel, 94, function(slot)
+            Addon:SetBiteSlot(currentIndex, "target", slot)
+        end)
+        row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", 386, y + 4)
         row.targetName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 500, y)
         row.targetName:SetWidth(190)
         row.targetName:SetJustifyH("LEFT")
-
-        local currentIndex = index
-        row.source:SetScript("OnEditFocusLost", function(box)
-            local edge = Addon.db.bites[currentIndex]
-            if edge then
-                local slot = Addon:ResolveSlotLabel(box:GetText(), true)
-                if slot then
-                    edge.source = slot
-                end
-            end
-            UI:Refresh()
-        end)
-        row.target:SetScript("OnEditFocusLost", function(box)
-            local edge = Addon.db.bites[currentIndex]
-            if edge then
-                local slot = Addon:ResolveSlotLabel(box:GetText(), false)
-                if slot then
-                    edge.target = slot
-                end
-            end
-            UI:Refresh()
-        end)
         self.biteRows[index] = row
     end
 end
@@ -1005,8 +1074,8 @@ function UI:RefreshBites()
         local edge = Addon.db.bites[index]
         if edge then
             row.wave:SetText(tostring(edge.wave))
-            SetInputText(row.source, Addon:GetSlotLabel(edge.source))
-            SetInputText(row.target, Addon:GetSlotLabel(edge.target))
+            self:SetRosterSlotSelectorValue(row.source, index == 1 and "BOSS" or edge.source)
+            self:SetRosterSlotSelectorValue(row.target, edge.target)
             row.sourceName:SetText(Addon:GetSlotName(edge.source))
             row.targetName:SetText(Addon:GetSlotName(edge.target))
             if Addon.state.completed[index] then

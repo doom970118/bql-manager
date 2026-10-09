@@ -8,6 +8,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Selector con iconos para las 30 especializaciones de WotLK, filtradas según el puesto TANK, MDPS, RDPS o HEALER.
 - Composición flexible con controles para quitar y añadir funciones, máximo dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
+- Selectores de origen y objetivo para las mordidas, con el primer origen BOSS fijo y protegido.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
 - Asignaciones de Aura Mastery, primer y segundo vuelo, MD y Tricks.

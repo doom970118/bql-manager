@@ -66,7 +66,8 @@ def main() -> None:
     assert "row.spec = CreateSpecSelector(panel, slot)" in UI
     assert 'SetRosterValue(currentSlot, "spec"' not in UI
     assert "selector:SetWidth(24)" in UI
-    assert "selector.label" not in UI
+    spec_selector = UI.split("local function CreateSpecSelector", 1)[1].split("function UI:SetRosterSlotSelectorValue", 1)[0]
+    assert "selector.label" not in spec_selector
 
     print("WotLK specialization catalog, migration, and selector validation passed.")
 

@@ -215,6 +215,10 @@ function Addon:PrepareRoster()
         local specId = self:NormalizeSpecId(record.spec)
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
     end
+
+    if self.db.bites and self.db.bites[1] then
+        self.db.bites[1].source = "BOSS"
+    end
 end
 
 function Addon:InitializeDatabase()
@@ -406,6 +410,29 @@ function Addon:RemoveRosterRole(role)
         record.name = slot
     end
     self:Print(oldLabel .. " retirado. Su posición queda disponible para otro rol.")
+    self:RefreshUI()
+    return true
+end
+
+function Addon:SetBiteSlot(index, field, slot)
+    index = tonumber(index)
+    if not index or not self.db.bites[index] then
+        return false
+    end
+    if field ~= "source" and field ~= "target" then
+        return false
+    end
+
+    if index == 1 and field == "source" then
+        self.db.bites[index].source = "BOSS"
+        self:RefreshUI()
+        return slot == "BOSS"
+    end
+    if not self:IsSlotActive(slot) then
+        return false
+    end
+
+    self.db.bites[index][field] = slot
     self:RefreshUI()
     return true
 end
@@ -1094,8 +1121,14 @@ function Addon:ReceiveSync(message, sender)
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
             self.db.bites[index].wave = tonumber(fields[3]) or self.db.bites[index].wave
-            self.db.bites[index].source = fields[4] or self.db.bites[index].source
-            self.db.bites[index].target = fields[5] or self.db.bites[index].target
+            if index == 1 then
+                self.db.bites[index].source = "BOSS"
+            elseif self:IsSlotActive(fields[4]) then
+                self.db.bites[index].source = fields[4]
+            end
+            if self:IsSlotActive(fields[5]) then
+                self.db.bites[index].target = fields[5]
+            end
         end
     elseif kind == "CD" then
         local group = fields[2]
