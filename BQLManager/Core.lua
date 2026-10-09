@@ -458,18 +458,36 @@ function Addon:InitializeDatabase()
 end
 
 function Addon:ResetDatabase()
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     _G.BQLManagerDB = DeepCopy(self.DEFAULTS)
     self.db = _G.BQLManagerDB
     self:PrepareRoster()
     self:ResetEncounter(false)
     self:RefreshUI()
     self:Print("Configuración inicial restaurada.")
+    return true
 end
 
 function Addon:RefreshUI()
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
+end
+
+function Addon:IsConfigurationLocked()
+    return self.state and self.state.active == true
+end
+
+function Addon:CanModifyConfiguration(silent)
+    if not self:IsConfigurationLocked() then
+        return true
+    end
+    if not silent then
+        self:Print("La configuración está bloqueada durante el encuentro. Usa Detener para editarla.")
+    end
+    return false
 end
 
 function Addon:GetSlotRecord(slot)
@@ -530,6 +548,9 @@ function Addon:GetZoneAssignment(zoneId)
 end
 
 function Addon:SetZoneAssignment(zoneId, slot)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     local role = self.ZONE_POSITION_ROLES[zoneId]
     if not role or not self:IsSlotActive(slot) or self:GetSlotRole(slot) ~= role then
         return false
@@ -644,6 +665,9 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
 end
 
 function Addon:SetCooldownAssignment(group, index, field, slot)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     index = tonumber(index)
     local record = index and self.db.cooldowns[group] and self.db.cooldowns[group][index]
     if not record or not self:IsCooldownSlotEligible(group, index, field, slot, true) then
@@ -676,6 +700,9 @@ function Addon:SetCooldownAssignment(group, index, field, slot)
 end
 
 function Addon:SetRosterValue(slot, field, value)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     if not self.SLOT_SET[slot] then
         return
     end
@@ -690,6 +717,9 @@ function Addon:SetRosterValue(slot, field, value)
 end
 
 function Addon:ClearRosterSlot(slot)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     if not self:IsSlotActive(slot) then
         return false
     end
@@ -703,6 +733,9 @@ function Addon:ClearRosterSlot(slot)
 end
 
 function Addon:AssignGuildMemberToSlot(slot, name)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     if not self:IsSlotActive(slot) then
         return false
     end
@@ -744,6 +777,9 @@ function Addon:AssignGuildMemberToSlot(slot, name)
 end
 
 function Addon:SetRosterSpec(slot, specId)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     if not self.SLOT_SET[slot] then
         return false
     end
@@ -778,6 +814,9 @@ function Addon:GetSlotReference(slot)
 end
 
 function Addon:AddRosterRole(role)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     role = strupper(self:Trim(role))
     if not self.ROLE_SET[role] then
         return false
@@ -814,6 +853,9 @@ function Addon:AddRosterRole(role)
 end
 
 function Addon:RemoveRosterRole(role)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     role = strupper(self:Trim(role))
     if not self.ROLE_SET[role] then
         return false
@@ -858,6 +900,9 @@ function Addon:RemoveRosterRole(role)
 end
 
 function Addon:SetBiteSlot(index, field, slot)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     index = tonumber(index)
     if not index or not self.db.bites[index] then
         return false
@@ -937,7 +982,10 @@ function Addon:IsBiteTargetAvailable(index, slot)
     return true
 end
 
-function Addon:SetBiteTarget(index, slot, skipAutoSync)
+function Addon:SetBiteTarget(index, slot, skipAutoSync, allowDuringEncounter)
+    if not allowDuringEncounter and not self:CanModifyConfiguration() then
+        return false
+    end
     index = tonumber(index)
     if not self:IsBiteTargetAvailable(index, slot) then
         return false
@@ -1116,6 +1164,12 @@ function Addon:AnnounceFullPlan()
 end
 
 function Addon:StartEncounter(announce)
+    if self.state.active then
+        self:Print("El encuentro ya está activo. Usa Detener antes de iniciarlo de nuevo.")
+        return false
+    end
+    self:CancelAutoSync()
+    self:DiscardQueuedConfigurationSync()
     self.state.active = true
     self.state.currentWave = 1
     self.state.completed = {}
@@ -1127,6 +1181,7 @@ function Addon:StartEncounter(announce)
     end
     self:BroadcastState()
     self:RefreshUI()
+    return true
 end
 
 function Addon:StopEncounter(reason, announce)
@@ -1143,9 +1198,13 @@ function Addon:StopEncounter(reason, announce)
     end
     self:BroadcastState()
     self:RefreshUI()
+    return true
 end
 
 function Addon:ResetEncounter(announce)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     self.state.active = false
     self.state.currentWave = 1
     self.state.completed = {}
@@ -1156,9 +1215,15 @@ function Addon:ResetEncounter(announce)
     end
     self:BroadcastState()
     self:RefreshUI()
+    return true
 end
 
 function Addon:SetWave(wave, announce)
+    if not self:CanModifyConfiguration() then
+        return false
+    end
+    self:CancelAutoSync()
+    self:DiscardQueuedConfigurationSync()
     wave = floor(tonumber(wave) or 1)
     if wave < 1 then
         wave = 1
@@ -1175,6 +1240,7 @@ function Addon:SetWave(wave, announce)
     end
     self:BroadcastState()
     self:RefreshUI()
+    return true
 end
 
 function Addon:IsWaveComplete(wave)
@@ -1256,7 +1322,7 @@ function Addon:DetectInitialBossBite(sourceName, targetName)
     end
 
     local plannedSlot = firstBite.edge.target
-    if not self:SetBiteTarget(firstBite.index, targetSlot, true) then
+    if not self:SetBiteTarget(firstBite.index, targetSlot, true, true) then
         self:Print("No se pudo adaptar el árbol a la primera mordida de " .. tostring(targetName) .. ".")
         return false
     end
@@ -1656,6 +1722,9 @@ function Addon:RefreshGroupMemberProfiles()
 end
 
 function Addon:UpdateAssignedPlayerSpec(name, specId)
+    if not self:CanModifyConfiguration(true) then
+        return false
+    end
     local changed = false
     for _, slot in ipairs(self:GetActiveSlotOrder()) do
         local record = self.db.roster[slot]
@@ -1751,6 +1820,9 @@ function Addon:ProcessInspectQueue(elapsed)
 end
 
 function Addon:ImportRaidRoster()
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     local members = self:GetRaidMembers()
     if #members == 0 then
         self:Print("No hay una banda activa para importar.")
@@ -1791,6 +1863,7 @@ function Addon:ImportRaidRoster()
         self:ScheduleAutoSync()
     end
     self:RefreshUI()
+    return changed > 0
 end
 
 local function EscapeField(value)
@@ -1843,7 +1916,7 @@ function Addon:CanSynchronizeConfiguration()
 end
 
 function Addon:ScheduleAutoSync()
-    if not self.db or not self.db.options.autoSync or self.receivingSync or not self:CanSynchronizeConfiguration() then
+    if not self.db or not self.db.options.autoSync or self:IsConfigurationLocked() or self.receivingSync or not self:CanSynchronizeConfiguration() then
         return false
     end
     self.autoSyncPending = true
@@ -1860,7 +1933,7 @@ function Addon:ProcessAutoSync(elapsed)
     if not self.autoSyncPending then
         return
     end
-    if not self.db or not self.db.options.autoSync or self.receivingSync or not self:CanSynchronizeConfiguration() then
+    if not self.db or not self.db.options.autoSync or self:IsConfigurationLocked() or self.receivingSync or not self:CanSynchronizeConfiguration() then
         self:CancelAutoSync()
         return
     end
@@ -1916,6 +1989,9 @@ function Addon:QueueSync(fields, channel, category)
 end
 
 function Addon:SyncConfiguration(silent)
+    if not self:CanModifyConfiguration(silent) then
+        return false
+    end
     local channel = self:GetAddonChannel()
     if not channel then
         if not silent then
@@ -1974,11 +2050,18 @@ function Addon:ReceiveSync(message, sender)
 
     local fields = SplitMessage(message)
     local kind = fields[1]
+    local receivingConfiguration = self.receivingSync
+        and self:NormalizeName(self.receivingSync) == self:NormalizeName(sender)
+    if self.state.active and kind ~= "STATE" then
+        self.receivingSync = nil
+        self.receivingSyncVersion = nil
+        return
+    end
     if kind == "BEGIN" then
         self.receivingSync = sender
         self.receivingSyncVersion = tonumber(fields[2]) or 1
     elseif kind == "END" then
-        if self.receivingSync then
+        if receivingConfiguration then
             self:Print("Configuración recibida de " .. tostring(sender) .. ".")
             self.receivingSync = nil
             self.receivingSyncVersion = nil
@@ -1986,7 +2069,7 @@ function Addon:ReceiveSync(message, sender)
             self:RebuildBiteSources()
             self:RefreshUI()
         end
-    elseif kind == "ROSTER" and self.SLOT_SET[fields[2]] then
+    elseif kind == "ROSTER" and receivingConfiguration and self.SLOT_SET[fields[2]] then
         local slot = fields[2]
         local record = self.db.roster[slot]
         record.name = fields[3] or ""
@@ -1998,7 +2081,7 @@ function Addon:ReceiveSync(message, sender)
         local specId = self:NormalizeSpecId(fields[4])
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
         self:RememberRosterPlayer(slot, "sync")
-    elseif kind == "BITE" then
+    elseif kind == "BITE" and receivingConfiguration then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
             self.db.bites[index].wave = tonumber(fields[3]) or self.db.bites[index].wave
@@ -2006,7 +2089,7 @@ function Addon:ReceiveSync(message, sender)
                 self.db.bites[index].target = fields[5]
             end
         end
-    elseif kind == "CD" then
+    elseif kind == "CD" and receivingConfiguration then
         local group = fields[2]
         local index = tonumber(fields[3])
         local record = self.db.cooldowns[group] and self.db.cooldowns[group][index]
@@ -2019,14 +2102,20 @@ function Addon:ReceiveSync(message, sender)
                 record.slot = fields[5] or record.slot
             end
         end
-    elseif kind == "ZONE" and self.db.zones[fields[2]] ~= nil then
+    elseif kind == "ZONE" and receivingConfiguration and self.db.zones[fields[2]] ~= nil then
         self.db.zones[fields[2]] = fields[3] or ""
-    elseif kind == "ZPOS" and self.ZONE_POSITION_ROLES[fields[2]] then
+    elseif kind == "ZPOS" and receivingConfiguration and self.ZONE_POSITION_ROLES[fields[2]] then
         self.db.zoneAssignments[fields[2]] = fields[3] or ""
     elseif kind == "STATE" then
         self.state.active = tonumber(fields[2]) == 1
         self.state.currentWave = tonumber(fields[3]) or 1
         self.state.initialBiteDetected = self.state.currentWave > 1
+        if self.state.active then
+            self:CancelAutoSync()
+            self:DiscardQueuedConfigurationSync()
+            self.receivingSync = nil
+            self.receivingSyncVersion = nil
+        end
         self:RefreshUI()
     end
 end

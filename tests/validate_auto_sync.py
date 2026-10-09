@@ -22,7 +22,7 @@ def main() -> None:
         'category == "CONFIG"',
         "self:DiscardQueuedConfigurationSync()",
         "Addon:ProcessAutoSync(elapsed)",
-        "self:SetBiteTarget(firstBite.index, targetSlot, true)",
+        "self:SetBiteTarget(firstBite.index, targetSlot, true, true)",
     ):
         assert snippet in CORE
 

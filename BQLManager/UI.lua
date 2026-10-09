@@ -743,6 +743,17 @@ local function SetInputText(input, value)
     end
 end
 
+function UI:RegisterConfigurationPanel(panel)
+    local overlay = CreateFrame("Frame", nil, panel)
+    overlay:SetAllPoints(panel)
+    overlay:SetFrameLevel(panel:GetFrameLevel() + 100)
+    overlay:EnableMouse(true)
+    overlay.notice = CreateText(overlay, "GameFontNormal", "Configuración bloqueada durante el encuentro", "TOPRIGHT", overlay, "TOPRIGHT", -18, -14)
+    overlay.notice:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
+    overlay:Hide()
+    tinsert(self.configurationLockOverlays, overlay)
+end
+
 function UI:CreateMainFrame()
     local frame = CreateFrame("Frame", "BQLManagerMainFrame", UIParent)
     self.frame = frame
@@ -764,7 +775,7 @@ function UI:CreateMainFrame()
     SetBackdrop(frame, COLORS.darkPurple, COLORS.border)
 
     frame:SetScript("OnDragStart", function(self)
-        if not Addon.db.options.locked then
+        if not Addon.db.options.locked and not Addon:IsConfigurationLocked() then
             self:StartMoving()
         end
     end)
@@ -803,6 +814,10 @@ function UI:CreateMainFrame()
     self.statusText:SetJustifyH("LEFT")
 
     self.lockCheck = CreateCheck(frame, "Bloquear ventana", function(button)
+        if Addon:IsConfigurationLocked() then
+            UI:Refresh()
+            return
+        end
         Addon.db.options.locked = button:GetChecked() and true or false
     end)
     local lockLabelWidth = self.lockCheck.label:GetStringWidth()
@@ -810,6 +825,7 @@ function UI:CreateMainFrame()
 
     self.tabs = {}
     self.panels = {}
+    self.configurationLockOverlays = {}
     local tabNames = {
         { key = "summary", label = "Resumen" },
         { key = "roster", label = "Plantilla" },
@@ -851,16 +867,19 @@ function UI:CreateSummaryPanel(parent)
     local start = CreateButton(panel, "Iniciar", 92, 24, function()
         Addon:StartEncounter(true)
     end)
+    self.startButton = start
     start:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -44)
 
     local stop = CreateButton(panel, "Detener", 92, 24, function()
         Addon:StopEncounter("manual", true)
     end)
+    self.stopButton = stop
     stop:SetPoint("LEFT", start, "RIGHT", 5, 0)
 
     local reset = CreateButton(panel, "Reiniciar", 92, 24, function()
         Addon:ResetEncounter(true)
     end)
+    self.resetButton = reset
     reset:SetPoint("LEFT", stop, "RIGHT", 5, 0)
 
     local announce = CreateButton(panel, "Anunciar plan", 112, 24, function()
@@ -871,6 +890,7 @@ function UI:CreateSummaryPanel(parent)
     local sync = CreateButton(panel, "Sincronizar", 104, 24, function()
         Addon:SyncConfiguration()
     end)
+    self.syncButton = sync
     sync:SetPoint("LEFT", announce, "RIGHT", 5, 0)
 
     local validate = CreateButton(panel, "Validar", 88, 24, function()
@@ -963,6 +983,7 @@ function UI:CreateRosterPanel(parent)
     local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
         Addon:ImportRaidRoster()
     end)
+    self.importButton = import
     import:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -10)
 
     local columns = {
@@ -988,6 +1009,7 @@ function UI:CreateRosterPanel(parent)
             self.rosterRows[slot] = row
         end
     end
+    self:RegisterConfigurationPanel(panel)
 end
 
 function UI:CreateBitesPanel(parent)
@@ -1029,6 +1051,7 @@ function UI:CreateBitesPanel(parent)
         row.targetName:SetJustifyH("LEFT")
         self.biteRows[index] = row
     end
+    self:RegisterConfigurationPanel(panel)
 end
 
 function UI:CreateCooldownPanel(parent)
@@ -1098,6 +1121,7 @@ function UI:CreateCooldownPanel(parent)
     BuildStandardGroup("flight1", "Primer vuelo", 18, -207)
     BuildStandardGroup("flight2", "Segundo vuelo", 418, -49)
     BuildThreatGroup("threat", "MD / Tricks", 418, -236)
+    self:RegisterConfigurationPanel(panel)
 end
 
 function UI:CreateZonesPanel(parent)
@@ -1275,6 +1299,10 @@ function UI:CreateZonesPanel(parent)
         input:SetPoint("TOPLEFT", panel, "TOPLEFT", 540, y - 15)
         local key = definition.key
         input:SetScript("OnEditFocusLost", function(box)
+            if not Addon:CanModifyConfiguration(true) then
+                UI:Refresh()
+                return
+            end
             local value = Addon:Trim(box:GetText())
             if Addon.db.zones[key] ~= value then
                 Addon.db.zones[key] = value
@@ -1284,6 +1312,7 @@ function UI:CreateZonesPanel(parent)
         end)
         self.zoneInputs[key] = input
     end
+    self:RegisterConfigurationPanel(panel)
 end
 
 function UI:ShowTab(key)
@@ -1505,6 +1534,63 @@ function UI:RefreshZones()
     end
 end
 
+function UI:RefreshConfigurationLock()
+    local locked = Addon:IsConfigurationLocked()
+    local editableControls = {
+        self.startButton,
+        self.resetButton,
+        self.syncButton,
+        self.importButton,
+        self.autoStartCheck,
+        self.whisperCheck,
+        self.warningCheck,
+        self.syncCheck,
+        self.autoSyncCheck,
+        self.lockCheck,
+    }
+
+    for _, control in ipairs(editableControls) do
+        if locked then
+            control:Disable()
+        else
+            control:Enable()
+        end
+    end
+    if locked then
+        self.stopButton:Enable()
+        CloseDropDownMenus()
+    else
+        self.stopButton:Disable()
+    end
+
+    for _, overlay in ipairs(self.configurationLockOverlays) do
+        if locked then
+            overlay:Show()
+        else
+            overlay:Hide()
+        end
+    end
+
+    for _, row in pairs(self.rosterRows or {}) do
+        if locked then
+            row.name.editBox:ClearFocus()
+        end
+        row.name.editBox:EnableMouse(not locked)
+        if row.name.editBox.EnableKeyboard then
+            row.name.editBox:EnableKeyboard(not locked)
+        end
+    end
+    for _, input in pairs(self.zoneInputs or {}) do
+        if locked then
+            input:ClearFocus()
+        end
+        input:EnableMouse(not locked)
+        if input.EnableKeyboard then
+            input:EnableKeyboard(not locked)
+        end
+    end
+end
+
 function UI:Refresh()
     if not self.frame or not Addon.db then
         return
@@ -1512,7 +1598,7 @@ function UI:Refresh()
 
     self.lockCheck:SetChecked(Addon.db.options.locked)
     if Addon.state.active then
-        self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave))
+        self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave) .. " · Configuración bloqueada")
         self.statusText:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
     else
         self.statusText:SetText("Seguimiento detenido")
@@ -1524,6 +1610,7 @@ function UI:Refresh()
     self:RefreshBites()
     self:RefreshCooldowns()
     self:RefreshZones()
+    self:RefreshConfigurationLock()
 end
 
 function UI:Toggle()

@@ -18,6 +18,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Notas tácticas de posiciones, rango y Sombras enjambradoras.
 - Importación de la banda actual sin destruir asignaciones válidas.
 - Sincronización manual o automática de la configuración desde el líder/asistentes hacia la banda.
+- Bloqueo de toda la configuración mientras el encuentro está activo, hasta que Lana'thel muera o se pulse `Detener`.
 - Validador de puestos vacíos, jugadores duplicados y conflictos en el árbol.
 
 La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asignaba `MDPS4` dos veces y dejaba `MDPS6` sin mordida. El valor inicial del addon corrige ese último destino a `MDPS6`; el validador detectará si se vuelve a crear un conflicto parecido.
@@ -32,7 +33,7 @@ La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asig
 ## Comandos
 
 - `/bql` o `/bql show`: abre/cierra la ventana.
-- `/bql start`: inicia y reinicia el seguimiento del intento.
+- `/bql start`: inicia el seguimiento si no hay un intento activo.
 - `/bql stop`: detiene el seguimiento.
 - `/bql reset`: limpia el progreso de mordidas.
 - `/bql wave 1-5`: salta a una ronda concreta.
@@ -43,7 +44,7 @@ La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asig
 
 ## Uso recomendado
 
-Antes del pull, completa los nombres genéricos que queden en la pestaña `Plantilla` y pulsa `Validar`. El líder o un asistente puede usar `Sincronizar` manualmente o activar `Auto-sincronización`; en ese modo, los cambios sucesivos se agrupan y se envía siempre la configuración más reciente a quienes tengan activada la opción de aceptar sincronizaciones. Al iniciar el intento, usa `Iniciar`. El addon anuncia la ronda actual y susurra a cada mordedor su objetivo. El seguimiento automático usa los hechizos de WotLK 3.3.5a: Mordedura vampírica (71726), Esencia de la Reina de Sangre (70867 y variantes) y Sed de sangre frenética (70877).
+Antes del pull, completa los nombres genéricos que queden en la pestaña `Plantilla` y pulsa `Validar`. El líder o un asistente puede usar `Sincronizar` manualmente o activar `Auto-sincronización`; en ese modo, los cambios sucesivos se agrupan y se envía siempre la configuración más reciente a quienes tengan activada la opción de aceptar sincronizaciones. Al iniciar el intento, usa `Iniciar`. Desde ese momento la plantilla, las mordidas, los cooldowns, las zonas y las opciones quedan en modo de solo lectura; tampoco se aceptan cambios de configuración por comandos ni por sincronización. El botón `Detener` vuelve a habilitar la edición, y la muerte de Lana'thel la habilita automáticamente. El addon anuncia la ronda actual y susurra a cada mordedor su objetivo. El seguimiento automático usa los hechizos de WotLK 3.3.5a: Mordedura vampírica (71726), Esencia de la Reina de Sangre (70867 y variantes) y Sed de sangre frenética (70877).
 
 La cabecera de `Plantilla` permite quitar (`-`) y añadir (`+`) puestos por función. Con la plantilla en 25/25, quita primero el puesto que sobra y luego añade el nuevo rol. No se puede retirar un puesto que todavía esté usado en mordidas o cooldowns; hay que reasignarlo antes. La composición admite como máximo dos tanques y siempre conserva al menos un healer.
 
