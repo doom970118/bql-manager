@@ -9,6 +9,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Composición flexible con controles para quitar y añadir funciones, máximo dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
 - Destinos seleccionables sin repeticiones y orígenes autocompletados según el orden de infección; BOSS permanece fijo al inicio.
+- Detección de la primera mordida real del boss para adaptar el árbol y los calls si eligió a un jugador distinto del planeado.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
 - Asignaciones de Aura Mastery, primer y segundo vuelo, MD y Tricks.
@@ -46,5 +47,7 @@ Antes del pull, completa los nombres genéricos que queden en la pestaña `Plant
 La cabecera de `Plantilla` permite quitar (`-`) y añadir (`+`) puestos por función. Con la plantilla en 25/25, quita primero el puesto que sobra y luego añade el nuevo rol. No se puede retirar un puesto que todavía esté usado en mordidas o cooldowns; hay que reasignarlo antes. La composición admite como máximo dos tanques y siempre conserva al menos un healer.
 
 En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los orígenes de las rondas siguientes se recalculan automáticamente. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
+
+Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
 
 Los anuncios a `RAID_WARNING` requieren ser líder o asistente. Si no lo eres, el addon usa el canal de banda normal.

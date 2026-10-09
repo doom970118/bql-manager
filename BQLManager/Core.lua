@@ -22,6 +22,7 @@ Addon.state = {
     currentWave = 1,
     completed = {},
     startedAt = nil,
+    initialBiteDetected = false,
 }
 
 Addon.messageQueue = {}
@@ -650,6 +651,7 @@ function Addon:StartEncounter(announce)
     self.state.currentWave = 1
     self.state.completed = {}
     self.state.startedAt = GetTime and GetTime() or 0
+    self.state.initialBiteDetected = false
     if announce ~= false then
         self:Announce("Seguimiento iniciado.")
         self:AnnounceWave(1, false)
@@ -679,6 +681,7 @@ function Addon:ResetEncounter(announce)
     self.state.currentWave = 1
     self.state.completed = {}
     self.state.startedAt = nil
+    self.state.initialBiteDetected = false
     if announce then
         self:Announce("Progreso de mordidas reiniciado.")
     end
@@ -697,6 +700,7 @@ function Addon:SetWave(wave, announce)
     self.state.currentWave = wave
     self.state.active = true
     self.state.completed = {}
+    self.state.initialBiteDetected = wave > 1
     if announce ~= false then
         self:AnnounceWave(wave, true)
     end
@@ -760,6 +764,40 @@ function Addon:MarkBite(sourceName, targetName)
         end
     end
     return false
+end
+
+function Addon:DetectInitialBossBite(sourceName, targetName)
+    if not self.state.active or self.state.currentWave ~= 1 or self.state.initialBiteDetected then
+        return false
+    end
+    if not self:IsBossName(sourceName) or self:Trim(targetName) == "" then
+        return false
+    end
+
+    local firstBite = self:GetWaveEdges(1)[1]
+    if not firstBite or self.state.completed[firstBite.index] then
+        return false
+    end
+
+    self.state.initialBiteDetected = true
+    local targetSlot = self:GetSlotForName(targetName)
+    if not targetSlot then
+        self:Print("Primera mordida detectada en " .. tostring(targetName) .. ", pero ese personaje no está en la plantilla. El árbol no se modificó.")
+        return false
+    end
+
+    local plannedSlot = firstBite.edge.target
+    if not self:SetBiteTarget(firstBite.index, targetSlot) then
+        self:Print("No se pudo adaptar el árbol a la primera mordida de " .. tostring(targetName) .. ".")
+        return false
+    end
+
+    if plannedSlot ~= targetSlot then
+        self:Print("Primera mordida real: " .. self:GetSlotName(targetSlot) .. " (" .. self:GetSlotLabel(targetSlot) .. "). Árbol actualizado automáticamente.")
+    else
+        self:Print("Primera mordida confirmada: " .. self:GetSlotName(targetSlot) .. " (" .. self:GetSlotLabel(targetSlot) .. ").")
+    end
+    return true
 end
 
 function Addon:WarnFrenzy(playerName)
@@ -865,9 +903,10 @@ function Addon:HandleCombatLog(...)
         return
     end
 
-    if (subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_AURA_APPLIED") and self:IsBiteSpell(data.spellId, data.spellName) then
-        self:MarkBite(data.sourceName, data.destName)
-    elseif subevent == "SPELL_AURA_APPLIED" and self:IsEssenceSpell(data.spellId, data.spellName) then
+    local isBiteEvent = (subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_AURA_APPLIED") and self:IsBiteSpell(data.spellId, data.spellName)
+    local isEssenceEvent = subevent == "SPELL_AURA_APPLIED" and self:IsEssenceSpell(data.spellId, data.spellName)
+    if isBiteEvent or isEssenceEvent then
+        self:DetectInitialBossBite(data.sourceName, data.destName)
         self:MarkBite(data.sourceName, data.destName)
     elseif subevent == "SPELL_AURA_APPLIED" and self:IsFrenzySpell(data.spellId, data.spellName) then
         self:WarnFrenzy(data.destName)
@@ -1217,6 +1256,7 @@ function Addon:ReceiveSync(message, sender)
     elseif kind == "STATE" then
         self.state.active = tonumber(fields[2]) == 1
         self.state.currentWave = tonumber(fields[3]) or 1
+        self.state.initialBiteDetected = self.state.currentWave > 1
         self:RefreshUI()
     end
 end
