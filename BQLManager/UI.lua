@@ -166,6 +166,26 @@ function UI:SetSpecSelectorValue(selector, specId)
     end
 end
 
+local function MoveClassMenuArrow(level)
+    local list = _G["DropDownList" .. tostring(level)]
+    if not list or not list.numButtons then
+        return
+    end
+
+    local buttonName = "DropDownList" .. tostring(level) .. "Button" .. tostring(list.numButtons)
+    local button = _G[buttonName]
+    local arrow = _G[buttonName .. "ExpandArrow"] or (button and button.expandArrow)
+    local icon = _G[buttonName .. "Icon"] or (button and button.icon)
+    if not button or not arrow or not icon then
+        return
+    end
+
+    arrow:ClearAllPoints()
+    arrow:SetPoint("LEFT", button, "LEFT", 1, 0)
+    icon:ClearAllPoints()
+    icon:SetPoint("LEFT", arrow, "RIGHT", 2, 0)
+end
+
 local function CreateSpecSelector(parent, slot)
     local selector = CreateFrame("Button", NextName("SpecSelector"), parent)
     selector:SetWidth(24)
@@ -201,6 +221,7 @@ local function CreateSpecSelector(parent, slot)
                         info.tCoordLeft, info.tCoordRight, info.tCoordTop, info.tCoordBottom = unpack(coords)
                     end
                     UIDropDownMenu_AddButton(info, level)
+                    MoveClassMenuArrow(level)
                 end
             end
         elseif level == 2 and menuList then

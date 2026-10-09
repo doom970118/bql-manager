@@ -48,6 +48,10 @@ def main() -> None:
     assert 'field ~= "name" and field ~= "spec"' not in CORE
     assert "member.classFile or member.class" not in CORE
     assert "UIDropDownMenu_Initialize" in UI
+    assert "local function MoveClassMenuArrow" in UI
+    assert "MoveClassMenuArrow(level)" in UI
+    assert 'arrow:SetPoint("LEFT", button, "LEFT", 1, 0)' in UI
+    assert 'icon:SetPoint("LEFT", arrow, "RIGHT", 2, 0)' in UI
     assert "Addon:ClassHasSpecForSlot(classKey, slot)" in UI
     assert "Addon:IsSpecAllowedForSlot(slot, spec.id)" in UI
     assert 'info.text = "            "' in UI
