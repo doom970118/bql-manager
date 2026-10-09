@@ -913,9 +913,19 @@ function UI:CreateSummaryPanel(parent)
     end)
     self.syncCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 310, -334)
 
-    self.validationText = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -382)
+    self.autoSyncCheck = CreateCheck(panel, "Auto-sincronización", function(button)
+        Addon.db.options.autoSync = button:GetChecked() and true or false
+        if Addon.db.options.autoSync then
+            Addon:ScheduleAutoSync()
+        else
+            Addon:CancelAutoSync()
+        end
+    end)
+    self.autoSyncCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -362)
+
+    self.validationText = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -394)
     self.validationText:SetWidth(775)
-    self.validationText:SetHeight(45)
+    self.validationText:SetHeight(38)
     self.validationText:SetJustifyH("LEFT")
     self.validationText:SetJustifyV("TOP")
 end
@@ -1265,7 +1275,11 @@ function UI:CreateZonesPanel(parent)
         input:SetPoint("TOPLEFT", panel, "TOPLEFT", 540, y - 15)
         local key = definition.key
         input:SetScript("OnEditFocusLost", function(box)
-            Addon.db.zones[key] = Addon:Trim(box:GetText())
+            local value = Addon:Trim(box:GetText())
+            if Addon.db.zones[key] ~= value then
+                Addon.db.zones[key] = value
+                Addon:ScheduleAutoSync()
+            end
             UI:Refresh()
         end)
         self.zoneInputs[key] = input
@@ -1334,6 +1348,7 @@ function UI:RefreshSummary()
     self.whisperCheck:SetChecked(Addon.db.options.whisperAssignments)
     self.warningCheck:SetChecked(Addon.db.options.raidWarnings)
     self.syncCheck:SetChecked(Addon.db.options.acceptSync)
+    self.autoSyncCheck:SetChecked(Addon.db.options.autoSync)
 
     local issues = Addon:GetValidationIssues()
     if #issues == 0 then

@@ -2,7 +2,7 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.9.5"
+Addon.VERSION = "1.10.0"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 
@@ -179,6 +179,7 @@ Addon.DEFAULTS = {
         whisperAssignments = true,
         raidWarnings = true,
         acceptSync = true,
+        autoSync = false,
         locked = false,
     },
     window = {

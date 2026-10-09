@@ -9,8 +9,8 @@ TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
 def main() -> None:
-    assert 'Addon.VERSION = "1.9.5"' in DEFAULTS
-    assert "## Version: 1.9.5" in TOC
+    assert 'Addon.VERSION = "1.10.0"' in DEFAULTS
+    assert "## Version: 1.10.0" in TOC
     assert "initialBiteDetected = false" in CORE
 
     detection = CORE.split("function Addon:DetectInitialBossBite", 1)[1].split(
@@ -20,7 +20,7 @@ def main() -> None:
     assert "self.state.initialBiteDetected" in detection
     assert "self:IsBossName(sourceName)" in detection
     assert "self:GetSlotForName(targetName)" in detection
-    assert "self:SetBiteTarget(firstBite.index, targetSlot)" in detection
+    assert "self:SetBiteTarget(firstBite.index, targetSlot, true)" in detection
     assert "no está en la plantilla" in detection
     assert "Árbol actualizado automáticamente" in detection
 

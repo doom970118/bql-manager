@@ -32,6 +32,9 @@ Addon.inspectQueue = {}
 Addon.inspectQueued = {}
 Addon.inspectElapsed = 0
 Addon.pendingInspect = nil
+Addon.autoSyncPending = false
+Addon.autoSyncElapsed = 0
+Addon.AUTO_SYNC_DELAY = 1.0
 
 local function DeepCopy(value)
     if type(value) ~= "table" then
@@ -544,6 +547,7 @@ function Addon:SetZoneAssignment(zoneId, slot)
         end
     end
     self.db.zoneAssignments[zoneId] = slot
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -666,6 +670,7 @@ function Addon:SetCooldownAssignment(group, index, field, slot)
     end
 
     record[field] = slot
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -680,6 +685,7 @@ function Addon:SetRosterValue(slot, field, value)
 
     self.db.roster[slot][field] = self:Trim(value)
     self:RememberRosterPlayer(slot, "manual")
+    self:ScheduleAutoSync()
     self:RefreshUI()
 end
 
@@ -691,6 +697,7 @@ function Addon:ClearRosterSlot(slot)
     local record = self.db.roster[slot]
     record.name = ""
     record.spec = ""
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -731,6 +738,7 @@ function Addon:AssignGuildMemberToSlot(slot, name)
     if specId == "" then
         self:Print(member.name .. " no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro.")
     end
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -747,6 +755,7 @@ function Addon:SetRosterSpec(slot, specId)
 
     self.db.roster[slot].spec = normalized
     self:RememberRosterPlayer(slot, "manual")
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -796,6 +805,7 @@ function Addon:AddRosterRole(role)
             end
             self:Print("Puesto " .. self:GetSlotLabel(slot) .. " añadido. Selecciona una especialización compatible.")
             self:PrepareZoneAssignments()
+            self:ScheduleAutoSync()
             self:RefreshUI()
             return true
         end
@@ -842,6 +852,7 @@ function Addon:RemoveRosterRole(role)
     end
     self:Print(oldLabel .. " retirado. Su posición queda disponible para otro rol.")
     self:PrepareZoneAssignments()
+    self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
@@ -926,7 +937,7 @@ function Addon:IsBiteTargetAvailable(index, slot)
     return true
 end
 
-function Addon:SetBiteTarget(index, slot)
+function Addon:SetBiteTarget(index, slot, skipAutoSync)
     index = tonumber(index)
     if not self:IsBiteTargetAvailable(index, slot) then
         return false
@@ -954,6 +965,9 @@ function Addon:SetBiteTarget(index, slot)
     end
 
     self:RebuildBiteSources()
+    if not skipAutoSync then
+        self:ScheduleAutoSync()
+    end
     self:RefreshUI()
     return true
 end
@@ -995,8 +1009,20 @@ function Addon:GetRaidChannel()
     return nil
 end
 
+function Addon:EnqueueMessage(item)
+    if item.category ~= "CONFIG" then
+        for index, queued in ipairs(self.messageQueue) do
+            if queued.category == "CONFIG" then
+                tinsert(self.messageQueue, index, item)
+                return
+            end
+        end
+    end
+    tinsert(self.messageQueue, item)
+end
+
 function Addon:EnqueueChat(message, channel, target)
-    tinsert(self.messageQueue, {
+    self:EnqueueMessage({
         kind = "CHAT",
         message = tostring(message or ""),
         channel = channel,
@@ -1004,12 +1030,13 @@ function Addon:EnqueueChat(message, channel, target)
     })
 end
 
-function Addon:EnqueueAddon(message, channel, target)
-    tinsert(self.messageQueue, {
+function Addon:EnqueueAddon(message, channel, target, category)
+    self:EnqueueMessage({
         kind = "ADDON",
         message = tostring(message or ""),
         channel = channel,
         target = target,
+        category = category,
     })
 end
 
@@ -1229,7 +1256,7 @@ function Addon:DetectInitialBossBite(sourceName, targetName)
     end
 
     local plannedSlot = firstBite.edge.target
-    if not self:SetBiteTarget(firstBite.index, targetSlot) then
+    if not self:SetBiteTarget(firstBite.index, targetSlot, true) then
         self:Print("No se pudo adaptar el árbol a la primera mordida de " .. tostring(targetName) .. ".")
         return false
     end
@@ -1629,12 +1656,20 @@ function Addon:RefreshGroupMemberProfiles()
 end
 
 function Addon:UpdateAssignedPlayerSpec(name, specId)
+    local changed = false
     for _, slot in ipairs(self:GetActiveSlotOrder()) do
         local record = self.db.roster[slot]
         if record and self:NormalizeName(record.name) == self:NormalizeName(name) and self:IsSpecAllowedForSlot(slot, specId) then
-            record.spec = specId
+            if record.spec ~= specId then
+                record.spec = specId
+                changed = true
+            end
         end
     end
+    if changed then
+        self:ScheduleAutoSync()
+    end
+    return changed
 end
 
 function Addon:HandleInspectReady(guid)
@@ -1752,6 +1787,9 @@ function Addon:ImportRaidRoster()
     end
 
     self:Print("Importación completada: " .. changed .. " puesto(s) rellenados sin sobrescribir asignaciones existentes.")
+    if changed > 0 then
+        self:ScheduleAutoSync()
+    end
     self:RefreshUI()
 end
 
@@ -1794,6 +1832,48 @@ function Addon:CanLeadRaid()
     return (IsRaidLeader and IsRaidLeader()) or (IsRaidOfficer and IsRaidOfficer())
 end
 
+function Addon:CanSynchronizeConfiguration()
+    if GetNumRaidMembers and GetNumRaidMembers() > 0 then
+        return self:CanLeadRaid()
+    end
+    if GetNumPartyMembers and GetNumPartyMembers() > 0 then
+        return IsPartyLeader and IsPartyLeader()
+    end
+    return false
+end
+
+function Addon:ScheduleAutoSync()
+    if not self.db or not self.db.options.autoSync or self.receivingSync or not self:CanSynchronizeConfiguration() then
+        return false
+    end
+    self.autoSyncPending = true
+    self.autoSyncElapsed = 0
+    return true
+end
+
+function Addon:CancelAutoSync()
+    self.autoSyncPending = false
+    self.autoSyncElapsed = 0
+end
+
+function Addon:ProcessAutoSync(elapsed)
+    if not self.autoSyncPending then
+        return
+    end
+    if not self.db or not self.db.options.autoSync or self.receivingSync or not self:CanSynchronizeConfiguration() then
+        self:CancelAutoSync()
+        return
+    end
+
+    self.autoSyncElapsed = self.autoSyncElapsed + elapsed
+    if self.autoSyncElapsed < self.AUTO_SYNC_DELAY then
+        return
+    end
+
+    self:CancelAutoSync()
+    self:SyncConfiguration(true)
+end
+
 function Addon:CanSendAssignmentWhispers()
     if GetNumRaidMembers and GetNumRaidMembers() > 0 then
         return self:CanLeadRaid()
@@ -1819,46 +1899,64 @@ function Addon:IsAuthorizedSender(sender)
     return false
 end
 
-function Addon:QueueSync(fields, channel)
+function Addon:DiscardQueuedConfigurationSync()
+    for index = #self.messageQueue, 1, -1 do
+        if self.messageQueue[index].category == "CONFIG" then
+            tremove(self.messageQueue, index)
+        end
+    end
+end
+
+function Addon:QueueSync(fields, channel, category)
     local encoded = {}
     for _, field in ipairs(fields) do
         tinsert(encoded, EscapeField(field))
     end
-    self:EnqueueAddon(table.concat(encoded, "|"), channel)
+    self:EnqueueAddon(table.concat(encoded, "|"), channel, nil, category)
 end
 
-function Addon:SyncConfiguration()
+function Addon:SyncConfiguration(silent)
     local channel = self:GetAddonChannel()
     if not channel then
-        self:Print("Debes estar en grupo o banda para sincronizar.")
-        return
+        if not silent then
+            self:Print("Debes estar en grupo o banda para sincronizar.")
+        end
+        return false
     end
-    if GetNumRaidMembers and GetNumRaidMembers() > 0 and not self:CanLeadRaid() then
-        self:Print("Solo el líder o un asistente puede sincronizar la configuración.")
-        return
+    if not self:CanSynchronizeConfiguration() then
+        if not silent then
+            self:Print("Solo el líder o un asistente puede sincronizar la configuración.")
+        end
+        return false
     end
 
-    self:QueueSync({ "BEGIN", self.DB_VERSION }, channel)
+    self:CancelAutoSync()
+    self:DiscardQueuedConfigurationSync()
+    local category = "CONFIG"
+    self:QueueSync({ "BEGIN", self.DB_VERSION }, channel, category)
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
-        self:QueueSync({ "ROSTER", slot, record.name, record.spec, record.role or "" }, channel)
+        self:QueueSync({ "ROSTER", slot, record.name, record.spec, record.role or "" }, channel, category)
     end
     for index, edge in ipairs(self.db.bites) do
-        self:QueueSync({ "BITE", index, edge.wave, edge.source, edge.target }, channel)
+        self:QueueSync({ "BITE", index, edge.wave, edge.source, edge.target }, channel, category)
     end
     for _, group in ipairs({ "aura", "flight1", "flight2", "threat" }) do
         for index, record in ipairs(self.db.cooldowns[group]) do
-            self:QueueSync({ "CD", group, index, record.label, record.slot or "", record.source or "", record.target or "" }, channel)
+            self:QueueSync({ "CD", group, index, record.label, record.slot or "", record.source or "", record.target or "" }, channel, category)
         end
     end
     for key, note in pairs(self.db.zones) do
-        self:QueueSync({ "ZONE", key, note }, channel)
+        self:QueueSync({ "ZONE", key, note }, channel, category)
     end
     for _, zoneId in ipairs(self.SLOT_ORDER) do
-        self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel)
+        self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel, category)
     end
-    self:QueueSync({ "END" }, channel)
-    self:Print("Sincronización encolada para la banda.")
+    self:QueueSync({ "END" }, channel, category)
+    if not silent then
+        self:Print("Sincronización encolada para la banda.")
+    end
+    return true
 end
 
 function Addon:BroadcastState()
@@ -2044,4 +2142,5 @@ end)
 Addon.eventFrame:SetScript("OnUpdate", function(_, elapsed)
     Addon:ProcessMessageQueue(elapsed)
     Addon:ProcessInspectQueue(elapsed)
+    Addon:ProcessAutoSync(elapsed)
 end)
