@@ -152,39 +152,30 @@ function UI:SetSpecSelectorValue(selector, specId)
     if not spec then
         selector.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
         selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        selector.label:SetText("Seleccionar...")
-        selector.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
         return
     end
 
     selector.icon:SetTexture(spec.icon)
     selector.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    selector.label:SetText(spec.name .. " · " .. spec.className)
     local color = _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[spec.classKey]
     if color then
-        selector.label:SetTextColor(color.r, color.g, color.b)
+        selector:SetBackdropBorderColor(color.r, color.g, color.b, 1)
     else
-        selector.label:SetTextColor(1, 1, 1)
+        selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
     end
 end
 
 local function CreateSpecSelector(parent, slot)
     local selector = CreateFrame("Button", NextName("SpecSelector"), parent)
-    selector:SetWidth(155)
-    selector:SetHeight(22)
+    selector:SetWidth(24)
+    selector:SetHeight(24)
     SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
 
     selector.icon = selector:CreateTexture(nil, "ARTWORK")
-    selector.icon:SetWidth(18)
-    selector.icon:SetHeight(18)
-    selector.icon:SetPoint("LEFT", selector, "LEFT", 4, 0)
-
-    selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector.icon, "RIGHT", 5, 0)
-    selector.label:SetWidth(112)
-    selector.label:SetJustifyH("LEFT")
-
-    selector.arrow = CreateText(selector, "GameFontNormalSmall", "v", "RIGHT", selector, "RIGHT", -5, 1)
-    selector.arrow:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+    selector.icon:SetWidth(20)
+    selector.icon:SetHeight(20)
+    selector.icon:SetPoint("CENTER", selector, "CENTER", 0, 0)
 
     selector:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
     selector.menu = CreateFrame("Frame", NextName("SpecMenu"), selector, "UIDropDownMenuTemplate")
@@ -478,7 +469,7 @@ function UI:CreateRosterPanel(parent)
     self.rosterRows = {}
 
     CreateSectionTitle(panel, "Plantilla de 25 jugadores", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "El selector evita nombres de especialización inválidos.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Pulsa el icono para elegir clase y especialización.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
@@ -494,7 +485,7 @@ function UI:CreateRosterPanel(parent)
     for _, column in ipairs(columns) do
         CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", column.x + 14, -47)
         CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", column.x + 83, -47)
-        CreateText(panel, "GameFontNormalSmall", "Especialización / clase", "TOPLEFT", panel, "TOPLEFT", column.x + 235, -47)
+        CreateText(panel, "GameFontNormalSmall", "Spec", "TOPLEFT", panel, "TOPLEFT", column.x + 240, -47)
 
         for index = column.startIndex, column.endIndex do
             local slot = Addon.SLOT_ORDER[index]
@@ -507,7 +498,7 @@ function UI:CreateRosterPanel(parent)
             row.name = CreateInput(panel, 150, 20)
             row.name:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 77, y + 5)
             row.spec = CreateSpecSelector(panel, slot)
-            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 231, y + 4)
+            row.spec:SetPoint("TOPLEFT", panel, "TOPLEFT", column.x + 241, y + 3)
 
             local currentSlot = slot
             row.name:SetScript("OnEditFocusLost", function(box)

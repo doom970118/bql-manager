@@ -35,6 +35,8 @@ def main() -> None:
     assert "UIDropDownMenu_Initialize" in UI
     assert "row.spec = CreateSpecSelector(panel, slot)" in UI
     assert 'SetRosterValue(currentSlot, "spec"' not in UI
+    assert "selector:SetWidth(24)" in UI
+    assert "selector.label" not in UI
 
     print("WotLK specialization catalog, migration, and selector validation passed.")
 
