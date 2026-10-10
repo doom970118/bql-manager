@@ -45,6 +45,9 @@ def main() -> None:
     )[0]
     for snippet in (
         'overlay.icon:SetTexture(biteIcon)',
+        "overlay.iconBorder:SetWidth(38)",
+        "overlay.iconBorder:SetHeight(38)",
+        'CreateFontString(nil, "OVERLAY", "GameFontNormal")',
         "overlay:SetBackdropBorderColor",
         "overlay.fill:SetTexture",
         "overlay:SetAlpha(pulse)",

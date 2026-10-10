@@ -138,8 +138,8 @@ function Highlights:GetOverlay(nameplate)
     overlay.fill:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT", -3, 3)
 
     overlay.iconBorder = CreateFrame("Frame", nil, overlay)
-    overlay.iconBorder:SetWidth(30)
-    overlay.iconBorder:SetHeight(30)
+    overlay.iconBorder:SetWidth(38)
+    overlay.iconBorder:SetHeight(38)
     overlay.iconBorder:SetPoint("BOTTOM", overlay, "TOP", 0, 3)
     overlay.iconBorder:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
@@ -155,8 +155,8 @@ function Highlights:GetOverlay(nameplate)
     overlay.icon:SetTexture(biteIcon)
     overlay.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    overlay.label = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    overlay.label:SetPoint("BOTTOM", overlay.iconBorder, "TOP", 0, 0)
+    overlay.label = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    overlay.label:SetPoint("BOTTOM", overlay.iconBorder, "TOP", 0, 2)
     overlay.label:SetShadowOffset(1, -1)
     overlay:Hide()
     self.overlays[nameplate] = overlay
