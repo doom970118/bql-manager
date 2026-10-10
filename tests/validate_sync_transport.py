@@ -29,7 +29,7 @@ def main() -> None:
         'self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }',
         "Addon:ReceiveSync(message, sender, channel)",
         "Addon:ProcessSyncReport(elapsed)",
-        'self:Print("Configuración aplicada por " .. tostring(sender) .. ".")',
+        'self:Print(L("Configuración aplicada por %s.", tostring(sender)))',
     ):
         assert snippet in CORE
 

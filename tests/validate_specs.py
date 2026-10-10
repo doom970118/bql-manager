@@ -12,7 +12,10 @@ UI = (ADDON_ROOT / "UI.lua").read_text(encoding="utf-8")
 def main() -> None:
     order = DEFAULTS.split("Addon.CLASS_ORDER = {", 1)[1].split("}", 1)[0]
     classes = re.findall(r'"([A-Z]+)"', order)
-    specs = re.findall(r'id = "([A-Z_]+)", name = "[^"]+", icon = "([^"]+)"', DEFAULTS)
+    specs = re.findall(
+        r'id = "([A-Z_]+)", name = (?:L\()?"[^"]+"\)?, icon = "([^"]+)"',
+        DEFAULTS,
+    )
     spec_ids = {spec_id for spec_id, _ in specs}
     roster = re.findall(r'^\s*([A-Z]+\d+) = .* spec = "([A-Z_]+)"', DEFAULTS, re.MULTILINE)
     role_rows = re.findall(r'id = "([A-Z_]+)".*roles = \{ ([^}]+) \}', DEFAULTS)

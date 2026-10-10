@@ -54,9 +54,14 @@ def main() -> None:
         "local locked = encounterLocked or not canEdit",
         "self.announceButton",
         "if encounterLocked and canEdit then",
-        "Modo lectura · Solo líder/asistente puede modificar",
     ):
         assert snippet in lock
+
+    status = UI.split("function UI:Refresh()", 1)[1].split(
+        "function UI:Toggle()", 1
+    )[0]
+    assert "Modo lectura · Solo líder/asistente puede modificar" in status
+    assert "overlay.notice" not in UI
 
     assert "self.announceButton = announce" in UI
     assert "Addon:CanEditConfiguration(true) and Addon:IsBossName" in CORE

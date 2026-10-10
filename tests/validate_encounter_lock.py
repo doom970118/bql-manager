@@ -16,7 +16,6 @@ def main() -> None:
         "and receivingConfiguration and self.SLOT_SET",
         "self:SetBiteTarget(firstBite.index, targetSlot, true, true)",
         "function UI:RegisterConfigurationPanel(panel)",
-        "Configuración bloqueada durante el encuentro",
         "function UI:RefreshConfigurationLock()",
         "self.stopButton:Enable()",
         "self.stopButton:Disable()",
@@ -48,6 +47,8 @@ def main() -> None:
 
     assert "allowDuringEncounter and not self:CanModifyConfiguration()" in CORE
     assert UI.count("self:RegisterConfigurationPanel(panel)") == 4
+    assert "overlay:EnableMouse(true)" in UI
+    assert "overlay.notice" not in UI
     assert "not Addon.db.options.locked and not Addon:IsConfigurationLocked()" in UI
     assert "self:RefreshConfigurationLock()" in UI
 

@@ -82,7 +82,7 @@ def main() -> None:
     assert "CLASS_ICON_TCOORDS" in UI
     assert "member.online and 1 or 0.55" in UI
     assert '"Hermandad · En grupo"' in UI
-    assert 'or "Grupo/Banda"' in UI
+    assert 'or L("Grupo/Banda")' in UI
     assert "Addon:IsPlaceholder(selector.slot, name)" in UI
     assert "displayName = Addon:GetSlotLabel(selector.slot)" in UI
     assert 'if key == "roster" then' in UI

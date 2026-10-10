@@ -12,6 +12,9 @@ local strformat = string.format
 local tinsert = table.insert
 local tostring = tostring
 local unpack = unpack
+local L = function(text, ...)
+    return Addon:Text(text, ...)
+end
 
 local COLORS = {
     purple = { 0.72, 0.30, 0.95 },
@@ -156,7 +159,7 @@ end
 local function CreateText(parent, font, text, anchor, relativeTo, relativeAnchor, x, y)
     local label = parent:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightSmall")
     label:SetPoint(anchor or "TOPLEFT", relativeTo or parent, relativeAnchor or anchor or "TOPLEFT", x or 0, y or 0)
-    label:SetText(text or "")
+    label:SetText(L(text or ""))
     return label
 end
 
@@ -164,7 +167,7 @@ local function CreateButton(parent, text, width, height, callback)
     local button = CreateFrame("Button", NextName("Button"), parent, "UIPanelButtonTemplate")
     button:SetWidth(width or 100)
     button:SetHeight(height or 22)
-    button:SetText(text or "")
+    button:SetText(L(text or ""))
     button:SetScript("OnClick", callback)
     return button
 end
@@ -260,7 +263,7 @@ function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
             button:Show()
         elseif rowIndex == 1 and #candidates == 0 then
             SetRoleIcon(button.icon, Addon:GetSlotRole(selector.slot), 0.6)
-            button.label:SetText("Sin coincidencias compatibles")
+            button.label:SetText(L("Sin coincidencias compatibles"))
             button.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
             button:Show()
         else
@@ -268,7 +271,7 @@ function UI:UpdateGuildMemberSuggestions(selector, resetOffset)
         end
     end
 
-    selector.footer:SetText(tostring(#candidates) .. " candidato(s) · rueda para desplazar")
+    selector.footer:SetText(L("%d candidato(s) · rueda para desplazar", #candidates))
 end
 
 function UI:ShowGuildMemberSuggestions(selector, resetOffset)
@@ -330,8 +333,8 @@ function UI:GetGuildMemberSuggestionsPopup()
     end)
     popup.clearButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Dejar puesto vacío")
-        GameTooltip:AddLine("Conserva el puesto y sus asignaciones, pero limpia el jugador y la spec.", 0.75, 0.75, 0.75, true)
+        GameTooltip:SetText(L("Dejar puesto vacío"))
+        GameTooltip:AddLine(L("Conserva el puesto y sus asignaciones, pero limpia el jugador y la spec."), 0.75, 0.75, 0.75, true)
         GameTooltip:Show()
     end)
     popup.clearButton:SetScript("OnLeave", function()
@@ -373,13 +376,13 @@ function UI:GetGuildMemberSuggestionsPopup()
             end
             local spec = Addon:GetSpecDefinition(self.member.spec)
             if spec then
-                GameTooltip:AddLine("Spec guardada: " .. spec.name, 0.75, 0.75, 0.75)
+                GameTooltip:AddLine(L("Spec guardada: %s", spec.name), 0.75, 0.75, 0.75)
             else
-                GameTooltip:AddLine("Spec todavía desconocida", 1, 0.82, 0.20)
+                GameTooltip:AddLine(L("Spec todavía desconocida"), 1, 0.82, 0.20)
             end
-            local source = self.member.inGuild and (self.member.inGroup and "Hermandad · En grupo" or "Hermandad") or "Grupo/Banda"
+            local source = self.member.inGuild and (self.member.inGroup and L("Hermandad · En grupo") or L("Hermandad")) or L("Grupo/Banda")
             GameTooltip:AddLine(source, 0.62, 0.52, 0.96)
-            GameTooltip:AddLine(self.member.online and "Conectado" or "Offline", self.member.online and 0.25 or 0.65, self.member.online and 0.95 or 0.65, self.member.online and 0.45 or 0.70)
+            GameTooltip:AddLine(self.member.online and L("Conectado") or "Offline", self.member.online and 0.25 or 0.65, self.member.online and 0.95 or 0.65, self.member.online and 0.45 or 0.70)
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", function()
@@ -597,7 +600,7 @@ local function CreateSpecSelector(parent, slot)
                     info.notCheckable = true
                     info.icon = CLASS_ICON_TEXTURE
                     info.tooltipTitle = class.name
-                    info.tooltipText = "Ver especializaciones compatibles"
+                    info.tooltipText = L("Ver especializaciones compatibles")
                     info.tooltipOnButton = true
                     local coords = CLASS_ICON_TCOORDS[classKey]
                     if coords then
@@ -643,9 +646,9 @@ local function CreateSpecSelector(parent, slot)
             GameTooltip:SetText(spec.name)
             GameTooltip:AddLine(spec.className, 1, 1, 1)
         else
-            GameTooltip:SetText("Seleccionar especialización")
+            GameTooltip:SetText(L("Seleccionar especialización"))
         end
-        GameTooltip:AddLine("Haz clic para elegir una clase y una especialización.", 0.75, 0.75, 0.75, true)
+        GameTooltip:AddLine(L("Haz clic para elegir una clase y una especialización."), 0.75, 0.75, 0.75, true)
         GameTooltip:Show()
     end)
     selector:SetScript("OnLeave", function()
@@ -666,21 +669,26 @@ function UI:SetRosterSlotSelectorValue(selector, slot)
     end
 
     if Addon:IsSlotActive(slot) then
-        selector.label:SetText(Addon:GetSlotLabel(slot))
+        if selector.displayName then
+            selector.label:SetText(Addon:GetSlotName(slot))
+        else
+            selector.label:SetText(Addon:GetSlotLabel(slot))
+        end
         local color = GetSlotRoleColor(slot)
         selector.label:SetTextColor(color[1], color[2], color[3])
         selector:SetBackdropBorderColor(color[1], color[2], color[3], 1)
     else
-        selector.label:SetText("Seleccionar...")
+        selector.label:SetText(L("Seleccionar..."))
         selector.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
         selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
     end
 end
 
-local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter)
+local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter, displayName)
     local selector = CreateFrame("Button", NextName("SlotSelector"), parent)
     selector:SetWidth(width or 94)
     selector:SetHeight(20)
+    selector.displayName = displayName and true or false
     SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
 
     selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector, "LEFT", 6, 0)
@@ -733,15 +741,15 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.value == "BOSS" then
             GameTooltip:SetText("BOSS")
-            GameTooltip:AddLine("Origen fijo de la primera mordida.", 1, 1, 1)
+            GameTooltip:AddLine(L("Origen fijo de la primera mordida."), 1, 1, 1)
         elseif Addon:IsSlotActive(self.value) then
             GameTooltip:SetText(Addon:GetSlotLabel(self.value))
             GameTooltip:AddLine(Addon:GetSlotName(self.value), 1, 1, 1)
             if self.locked then
-                GameTooltip:AddLine("Origen calculado automáticamente.", 0.75, 0.75, 0.75)
+                GameTooltip:AddLine(L("Origen calculado automáticamente."), 0.75, 0.75, 0.75)
             end
         else
-            GameTooltip:SetText("Seleccionar puesto")
+            GameTooltip:SetText(L("Seleccionar puesto"))
         end
         GameTooltip:Show()
     end)
@@ -811,8 +819,6 @@ function UI:RegisterConfigurationPanel(panel)
     overlay:SetAllPoints(panel)
     overlay:SetFrameLevel(panel:GetFrameLevel() + 100)
     overlay:EnableMouse(true)
-    overlay.notice = CreateText(overlay, "GameFontNormal", "Configuración bloqueada durante el encuentro", "TOPRIGHT", overlay, "TOPRIGHT", -18, -14)
-    overlay.notice:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
     overlay:Hide()
     tinsert(self.configurationLockOverlays, overlay)
 end
@@ -895,6 +901,7 @@ function UI:CreateMainFrame()
         { key = "bites", label = "Mordidas" },
         { key = "cooldowns", label = "Cooldowns" },
         { key = "zones", label = "Zonas" },
+        { key = "options", label = "Opciones" },
     }
 
     local previous
@@ -917,6 +924,7 @@ function UI:CreateMainFrame()
     self:CreateBitesPanel(frame)
     self:CreateCooldownPanel(frame)
     self:CreateZonesPanel(frame)
+    self:CreateOptionsPanel(frame)
     self:ShowTab("summary", true)
     frame:Hide()
 end
@@ -1314,13 +1322,13 @@ function UI:CreateZonesPanel(parent)
             if currentZoneId == "BOSS" then
                 GameTooltip:SetText("BQL")
             else
-                GameTooltip:SetText("Zona " .. tostring(zoneRole))
+                GameTooltip:SetText(L("Zona %s", tostring(zoneRole)))
                 if self.assignedSlot then
                     GameTooltip:AddLine(Addon:GetSlotLabel(self.assignedSlot) .. " · " .. Addon:GetSlotName(self.assignedSlot), 1, 1, 1)
                 else
-                    GameTooltip:AddLine("Sin puesto asignado", 1, 0.35, 0.35)
+                    GameTooltip:AddLine(L("Sin puesto asignado"), 1, 0.35, 0.35)
                 end
-                GameTooltip:AddLine("Haz clic para seleccionar un puesto " .. tostring(zoneRole) .. ".", 0.75, 0.75, 0.75, true)
+                GameTooltip:AddLine(L("Haz clic para seleccionar un puesto %s.", tostring(zoneRole)), 0.75, 0.75, 0.75, true)
             end
             GameTooltip:Show()
         end)
@@ -1387,6 +1395,139 @@ function UI:CreateZonesPanel(parent)
     self:RegisterConfigurationPanel(panel)
 end
 
+function UI:IsHighlightTestSlotAvailable(slot)
+    if not Addon:IsSlotActive(slot) then
+        return false
+    end
+    return not Addon:IsPlaceholder(slot, Addon:GetSlotName(slot))
+end
+
+function UI:EnsureHighlightTestSlots()
+    local candidates = {}
+    for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
+        if self:IsHighlightTestSlotAvailable(slot) then
+            tinsert(candidates, slot)
+        end
+    end
+
+    if not self:IsHighlightTestSlotAvailable(self.highlightTestSourceSlot) then
+        self.highlightTestSourceSlot = candidates[1]
+    end
+    if not self:IsHighlightTestSlotAvailable(self.highlightTestTargetSlot)
+        or self.highlightTestTargetSlot == self.highlightTestSourceSlot then
+        self.highlightTestTargetSlot = nil
+        for _, slot in ipairs(candidates) do
+            if slot ~= self.highlightTestSourceSlot then
+                self.highlightTestTargetSlot = slot
+                break
+            end
+        end
+    end
+end
+
+function UI:CreateOptionsPanel(parent)
+    local panel = CreatePanel(parent)
+    self.panels.options = panel
+
+    CreateSectionTitle(panel, "Ayudas personales de mordida", 16, -14)
+    local description = CreateText(
+        panel,
+        "GameFontHighlightSmall",
+        "Resalta localmente la barra y muestra un icono sobre el jugador relacionado contigo en la ronda actual.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -47
+    )
+    description:SetWidth(760)
+    description:SetJustifyH("LEFT")
+
+    self.biteHighlightsCheck = CreateCheck(panel, "Mostrar iconos locales y resaltar barras", function(button)
+        Addon.db.options.biteHighlights = button:GetChecked() and true or false
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:RefreshNow()
+        end
+    end)
+    self.biteHighlightsCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -78)
+
+    self.forceNameplatesCheck = CreateCheck(panel, "Activar placas amistosas durante el encuentro", function(button)
+        Addon.db.options.forceFriendlyNameplates = button:GetChecked() and true or false
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:RefreshNow()
+        end
+    end)
+    self.forceNameplatesCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -108)
+
+    CreateSectionTitle(panel, "Probar las mordidas", 16, -158)
+    local testHelp = CreateText(
+        panel,
+        "GameFontDisableSmall",
+        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDIDO en rojo durante 15 segundos.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -190
+    )
+    testHelp:SetWidth(760)
+    testHelp:SetJustifyH("LEFT")
+
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 18, -230)
+    self.highlightSourceSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+        UI.highlightTestSourceSlot = slot
+        if UI.highlightTestTargetSlot == slot then
+            UI.highlightTestTargetSlot = nil
+        end
+        UI:RefreshOptions()
+    end, nil, function(slot)
+        return UI:IsHighlightTestSlotAvailable(slot)
+    end, true)
+    self.highlightSourceSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -249)
+
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 270, -230)
+    self.highlightTargetSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+        UI.highlightTestTargetSlot = slot
+        UI:RefreshOptions()
+    end, nil, function(slot)
+        return UI:IsHighlightTestSlotAvailable(slot) and slot ~= UI.highlightTestSourceSlot
+    end, true)
+    self.highlightTargetSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -249)
+
+    self.highlightTestButton = CreateButton(panel, "Probar", 100, 24, function()
+        UI:EnsureHighlightTestSlots()
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:StartTest(UI.highlightTestSourceSlot, UI.highlightTestTargetSlot)
+        end
+        UI:RefreshOptions()
+    end)
+    self.highlightTestButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 520, -247)
+
+    self.highlightStopButton = CreateButton(panel, "Detener prueba", 120, 24, function()
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:StopTest()
+        end
+    end)
+    self.highlightStopButton:SetPoint("LEFT", self.highlightTestButton, "RIGHT", 6, 0)
+
+    self.highlightTestStatus = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -292)
+    self.highlightTestStatus:SetWidth(760)
+    self.highlightTestStatus:SetJustifyH("LEFT")
+
+    CreateSectionTitle(panel, "Significado visual", 16, -338)
+    local legend = CreateText(
+        panel,
+        "GameFontHighlightSmall",
+        "Rojo: jugador al que debes morder.    Morado: jugador que debe morderte.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -370
+    )
+    legend:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+end
+
 function UI:ShowTab(key, skipRefresh)
     self.currentTab = key
     if key == "roster" then
@@ -1426,10 +1567,10 @@ function UI:RefreshSummary()
     end
 
     if Addon.state.active then
-        self.summaryState:SetText("Estado: ACTIVO · Mordida actual: " .. tostring(Addon.state.currentWave))
+        self.summaryState:SetText(L("Estado: ACTIVO · Mordida actual: %d", Addon.state.currentWave))
         self.summaryState:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
     else
-        self.summaryState:SetText("Estado: detenido · Preparado para un nuevo intento")
+        self.summaryState:SetText(L("Estado: detenido · Preparado para un nuevo intento"))
         self.summaryState:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
     end
 
@@ -1437,7 +1578,7 @@ function UI:RefreshSummary()
         local label = self.waveTexts[wave]
         local complete = Addon:IsWaveComplete(wave)
         local marker = complete and "[OK]" or (Addon.state.active and Addon.state.currentWave == wave and ">>" or "-")
-        label:SetText(marker .. "  Mordida " .. wave .. ":  " .. Addon:FormatWave(wave, false))
+        label:SetText(marker .. "  " .. L("Mordida %d:  %s", wave, Addon:FormatWave(wave, false)))
         if complete then
             label:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
         elseif Addon.state.active and Addon.state.currentWave == wave then
@@ -1455,11 +1596,11 @@ function UI:RefreshSummary()
 
     local issues = Addon:GetValidationIssues()
     if #issues == 0 then
-        self.validationText:SetText("Validación correcta. La plantilla y el árbol de mordidas no tienen conflictos.")
+        self.validationText:SetText(L("Validación correcta. La plantilla y el árbol de mordidas no tienen conflictos."))
         self.validationText:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
     else
         local first = issues[1] or ""
-        self.validationText:SetText("Validación: " .. #issues .. " problema(s). Primero: " .. first .. " Usa el botón Validar para ver la lista completa en el chat.")
+        self.validationText:SetText(L("Validación: %d problema(s). Primero: %s Usa el botón Validar para ver la lista completa en el chat.", #issues, first))
         self.validationText:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
     end
 end
@@ -1574,7 +1715,7 @@ function UI:RefreshCooldowns()
 
     for _, row in ipairs(self.cooldownRows) do
         local record = Addon.db.cooldowns[row.group][row.index]
-        row.label:SetText(record.label or "")
+        row.label:SetText(L(record.label or ""))
         if row.group == "threat" then
             self:SetRosterSlotSelectorValue(row.source, record.source)
             self:SetRosterSlotSelectorValue(row.target, record.target)
@@ -1592,19 +1733,47 @@ function UI:RefreshZones()
     end
 
     for key, input in pairs(self.zoneInputs) do
-        SetInputText(input, Addon.db.zones[key])
+        SetInputText(input, L(Addon.db.zones[key]))
     end
     for zoneId, marker in pairs(self.mapMarkers) do
         local slot = zoneId == "BOSS" and "BOSS" or Addon:GetZoneAssignment(zoneId)
         marker.assignedSlot = slot
         marker:Show()
-        local name = slot == "BOSS" and "BQL" or (slot and Addon:GetSlotName(slot) or "Sin asignar")
+        local name = slot == "BOSS" and "BQL" or (slot and Addon:GetSlotName(slot) or L("Sin asignar"))
         if string.len(name) > marker.maxChars then
             name = string.sub(name, 1, marker.maxChars - 1) .. "."
         end
         marker.label:SetText(name)
         local color = zoneId == "BOSS" and COLORS.boss or GetRoleColor(marker.role)
         marker:SetBackdropBorderColor(color[1], color[2], color[3], 1)
+    end
+end
+
+function UI:RefreshOptions()
+    if not self.biteHighlightsCheck then
+        return
+    end
+    self:EnsureHighlightTestSlots()
+    self.biteHighlightsCheck:SetChecked(Addon.db.options.biteHighlights)
+    self.forceNameplatesCheck:SetChecked(Addon.db.options.forceFriendlyNameplates)
+    self:SetRosterSlotSelectorValue(self.highlightSourceSelector, self.highlightTestSourceSlot)
+    self:SetRosterSlotSelectorValue(self.highlightTargetSelector, self.highlightTestTargetSlot)
+
+    local testing = Addon.BiteHighlights and Addon.BiteHighlights:IsTestActive()
+    if testing then
+        self.highlightTestStatus:SetText(L("Prueba activa: busca los iconos y bordes pulsantes sobre ambos jugadores."))
+        self.highlightTestStatus:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
+        self.highlightStopButton:Enable()
+    else
+        self.highlightTestStatus:SetText(L("La prueba no cambia la plantilla ni envía marcas a los demás jugadores."))
+        self.highlightTestStatus:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        self.highlightStopButton:Disable()
+    end
+
+    if self.highlightTestSourceSlot and self.highlightTestTargetSlot then
+        self.highlightTestButton:Enable()
+    else
+        self.highlightTestButton:Disable()
     end
 end
 
@@ -1644,11 +1813,6 @@ function UI:RefreshConfigurationLock()
 
     for _, overlay in ipairs(self.configurationLockOverlays) do
         if locked then
-            if canEdit then
-                overlay.notice:SetText("Configuración bloqueada durante el encuentro")
-            else
-                overlay.notice:SetText("Modo lectura · Solo líder/asistente puede modificar")
-            end
             overlay:Show()
         else
             overlay:Hide()
@@ -1707,16 +1871,16 @@ function UI:Refresh()
     self.lockCheck:SetChecked(Addon.db.options.locked)
     local canEdit = Addon:CanEditConfiguration(true)
     if not canEdit and Addon.state.active then
-        self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave) .. " · Modo lectura")
+        self.statusText:SetText(L("Seguimiento activo · Mordida %d · Modo lectura", Addon.state.currentWave))
         self.statusText:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
     elseif not canEdit then
-        self.statusText:SetText("Modo lectura · Solo líder/asistente puede modificar")
+        self.statusText:SetText(L("Modo lectura · Solo líder/asistente puede modificar"))
         self.statusText:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
     elseif Addon.state.active then
-        self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave) .. " · Configuración bloqueada")
+        self.statusText:SetText(L("Seguimiento activo · Mordida %d · Configuración bloqueada", Addon.state.currentWave))
         self.statusText:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
     else
-        self.statusText:SetText("Seguimiento detenido")
+        self.statusText:SetText(L("Seguimiento detenido"))
         self.statusText:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
     end
 
@@ -1725,6 +1889,7 @@ function UI:Refresh()
     self:RefreshBites()
     self:RefreshCooldowns()
     self:RefreshZones()
+    self:RefreshOptions()
     self:RefreshConfigurationLock()
 end
 

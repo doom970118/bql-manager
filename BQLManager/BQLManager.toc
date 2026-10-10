@@ -1,10 +1,14 @@
 ## Interface: 30300
 ## Title: BQL Manager
-## Notes: Organiza plantilla, mordidas, cooldowns y posiciones para Reina de Sangre Lana'thel.
+## Notes: Organizes the roster, bites, cooldowns, and positions for Blood-Queen Lana'thel.
+## Notes-esES: Organiza plantilla, mordidas, cooldowns y posiciones para Reina de Sangre Lana'thel.
+## Notes-esMX: Organiza plantilla, mordidas, cooldowns y posiciones para Reina de Sangre Lana'thel.
 ## Author: Latinos del WoW
-## Version: 1.12.11
+## Version: 1.14.0
 ## SavedVariables: BQLManagerDB
 
+Locale.lua
 Defaults.lua
 Core.lua
+Highlights.lua
 UI.lua

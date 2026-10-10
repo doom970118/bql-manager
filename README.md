@@ -19,6 +19,8 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Importación de la banda actual sin destruir asignaciones válidas.
 - Sincronización manual o automática desde el líder de grupo o el líder/asistentes de banda hacia los demás jugadores.
 - Modo de solo lectura para los miembros normales mientras están en grupo o banda; fuera de grupo pueden preparar sus plantillas.
+- Iconos locales y bordes pulsantes sobre las placas amistosas para identificar al mordedor o al objetivo personal de cada ronda, con una prueba configurable desde el tab `Opciones`.
+- Interfaz bilingüe: español automático para `esES`/`esMX` e inglés como respaldo para cualquier otro idioma del cliente.
 - Bloqueo de toda la configuración mientras el encuentro está activo, hasta que Lana'thel muera o se pulse `Detener`.
 - Validador de puestos vacíos, jugadores duplicados y conflictos en el árbol.
 
@@ -30,6 +32,10 @@ La plantilla inicial procede de `Reina.xlsx`. En el Excel, la última ronda asig
 2. Comprueba que el archivo quede en `Interface\AddOns\BQLManager\BQLManager.toc`.
 3. Reinicia el juego o ejecuta `/reload`.
 4. Abre la ventana con `/bql`.
+
+## Idioma
+
+El idioma se detecta con el locale del cliente de WoW. Los clientes `esES` y `esMX` muestran el addon en español; todos los demás locales, incluidos los clientes chinos, rusos, alemanes o franceses, reciben la interfaz y los mensajes locales en inglés. La elección es local para cada jugador y no se sincroniza con la banda.
 
 ## Comandos
 
