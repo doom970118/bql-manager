@@ -816,8 +816,6 @@ function UI:RegisterConfigurationPanel(panel)
     overlay:SetAllPoints(panel)
     overlay:SetFrameLevel(panel:GetFrameLevel() + 100)
     overlay:EnableMouse(true)
-    overlay.notice = CreateText(overlay, "GameFontNormal", "Configuración bloqueada durante el encuentro", "TOPRIGHT", overlay, "TOPRIGHT", -18, -14)
-    overlay.notice:SetTextColor(COLORS.red[1], COLORS.red[2], COLORS.red[3])
     overlay:Hide()
     tinsert(self.configurationLockOverlays, overlay)
 end
@@ -1812,11 +1810,6 @@ function UI:RefreshConfigurationLock()
 
     for _, overlay in ipairs(self.configurationLockOverlays) do
         if locked then
-            if canEdit then
-                overlay.notice:SetText("Configuración bloqueada durante el encuentro")
-            else
-                overlay.notice:SetText("Modo lectura · Solo líder/asistente puede modificar")
-            end
             overlay:Show()
         else
             overlay:Hide()
