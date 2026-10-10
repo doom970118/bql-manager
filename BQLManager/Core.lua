@@ -18,6 +18,11 @@ local tsort = table.sort
 local type = type
 local tostring = tostring
 local MESSAGE_SEPARATOR = "@"
+local TRUSTED_SPEC_SOURCES = {
+    talents = true,
+    inspect = true,
+    manual = true,
+}
 
 Addon.state = {
     active = false,
@@ -47,6 +52,7 @@ Addon.outgoingSyncActive = false
 Addon.pendingManualSync = false
 Addon.syncUIRefreshPending = false
 Addon.syncUIRefreshElapsed = 0
+Addon.verifiedGroupSpecs = {}
 
 local function DeepCopy(value)
     if type(value) ~= "table" then
@@ -256,9 +262,15 @@ function Addon:RememberPlayerProfile(name, classKey, specId, online, isGuildMemb
     local normalizedSpec = self:NormalizeSpecId(specId)
     local spec = self:GetSpecDefinition(normalizedSpec)
     if spec and (not classKey or spec.classKey == classKey) then
-        member.spec = normalizedSpec
-        member.classKey = spec.classKey
-        member.specSource = specSource or member.specSource or "roster"
+        local incomingSource = specSource or member.specSource or "roster"
+        local existingSpec = self:NormalizeSpecId(member.spec)
+        local existingTrusted = TRUSTED_SPEC_SOURCES[member.specSource] == true
+        local incomingTrusted = TRUSTED_SPEC_SOURCES[incomingSource] == true
+        if not existingSpec or incomingTrusted or not existingTrusted then
+            member.spec = normalizedSpec
+            member.classKey = spec.classKey
+            member.specSource = incomingSource
+        end
     elseif member.spec == nil then
         member.spec = ""
     end
@@ -1696,7 +1708,8 @@ function Addon:GetAutomaticRaidMemberSpecForSlot(member, slot)
 
     local profile = self:GetGuildMemberProfile(member.name)
     local classKey = strupper(self:Trim((profile and profile.classKey) or member.classFile))
-    local specId = self:NormalizeSpecId(profile and profile.spec)
+    local key = self:NormalizeName(member.name)
+    local specId = self:NormalizeSpecId(self.verifiedGroupSpecs and self.verifiedGroupSpecs[key])
     if specId then
         if self:IsSpecAllowedForSlot(slot, specId) then
             return specId, true
@@ -1793,6 +1806,8 @@ function Addon:RefreshGroupMemberProfiles()
     local raidCount = GetNumRaidMembers and GetNumRaidMembers() or 0
     local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
     local hasGroup = raidCount > 0 or partyCount > 0
+    local playerName = UnitName("player")
+    local playerKey = self:NormalizeName(playerName)
     for _, unit in ipairs(self:GetGroupUnitTokens()) do
         if not UnitExists or UnitExists(unit) then
             local name = UnitName(unit)
@@ -1801,15 +1816,22 @@ function Addon:RefreshGroupMemberProfiles()
                 local connected = not UnitIsConnected or UnitIsConnected(unit)
                 local member = self:RememberPlayerProfile(name, classKey, nil, connected, nil)
                 member.inGroup = hasGroup and true or false
-                if UnitIsUnit and UnitIsUnit(unit, "player") then
+                if self:NormalizeName(name) == playerKey then
                     local specId = self:DetectTalentSpec(classKey, false)
                     if specId then
                         member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
+                        self.verifiedGroupSpecs[playerKey] = specId
                     end
                 elseif member and member.inGroup and connected then
                     self:QueueInspectUnit(unit)
                 end
             end
+        end
+    end
+    for key in pairs(self.verifiedGroupSpecs) do
+        local member = self.db.guildMembers[key]
+        if not member or not member.inGroup then
+            self.verifiedGroupSpecs[key] = nil
         end
     end
     self:RefreshUI()
@@ -1849,6 +1871,7 @@ function Addon:HandleInspectReady(guid)
     local specId = classKey and self:DetectTalentSpec(classKey, true) or nil
     if specId then
         self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
+        self.verifiedGroupSpecs[self:NormalizeName(pending.name)] = specId
         self:UpdateAssignedPlayerSpec(pending.name, specId)
     else
         self:QueueInspectUnit(pending.unit)

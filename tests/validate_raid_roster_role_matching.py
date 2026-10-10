@@ -6,9 +6,9 @@ ADDON_ROOT = ROOT / "BQLManager" if (ROOT / "BQLManager").is_dir() else ROOT
 CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 
 
-def automatic_match(known_spec, class_roles, slot_role):
-    if known_spec is not None:
-        return known_spec if slot_role in known_spec[1] else None
+def automatic_match(verified_spec, class_roles, slot_role):
+    if verified_spec is not None:
+        return verified_spec if slot_role in verified_spec[1] else None
     possible_roles = set().union(*(roles for _, roles in class_roles))
     return "" if possible_roles == {slot_role} else None
 
@@ -19,7 +19,7 @@ def main() -> None:
     )[1].split("function Addon:GetGroupUnitTokens", 1)[0]
     for snippet in (
         "self:GetGuildMemberProfile(member.name)",
-        "profile and profile.spec",
+        "self.verifiedGroupSpecs and self.verifiedGroupSpecs[key]",
         "self:IsSpecAllowedForSlot(slot, specId)",
         "local possibleRoles = {}",
         "roleCount == 1 and possibleRoles[slotRole]",
@@ -39,6 +39,24 @@ def main() -> None:
     ):
         assert snippet in importer
     assert "local nextMember" not in importer
+
+    profiles = CORE.split("function Addon:RememberPlayerProfile", 1)[1].split(
+        "function Addon:RememberRosterPlayer", 1
+    )[0]
+    assert "TRUSTED_SPEC_SOURCES" in profiles
+    assert "incomingTrusted or not existingTrusted" in profiles
+
+    inspection = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
+        "function Addon:UpdateAssignedPlayerSpec", 1
+    )[0]
+    assert 'local playerName = UnitName("player")' in inspection
+    assert "self.verifiedGroupSpecs[playerKey] = specId" in inspection
+    assert "not member.inGroup" in inspection
+
+    inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
+        "function Addon:ProcessInspectQueue", 1
+    )[0]
+    assert "self.verifiedGroupSpecs[self:NormalizeName(pending.name)] = specId" in inspect_ready
 
     mage = [
         ("MAGE_ARCANE", {"RDPS"}),
