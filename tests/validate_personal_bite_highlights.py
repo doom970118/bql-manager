@@ -24,7 +24,7 @@ def assignments(player_slot, wave_edges, completed=None):
 
 def main() -> None:
     assert "biteHighlights = true" in DEFAULTS
-    assert "forceFriendlyNameplates = true" in DEFAULTS
+    assert "forceFriendlyNameplates" not in DEFAULTS
     assert "Core.lua\nHighlights.lua\nUI.lua" in TOC
 
     production = HIGHLIGHTS.split("function Highlights:BuildAssignments", 1)[1].split(
@@ -68,8 +68,10 @@ def main() -> None:
     assert "self.activeOverlays[overlay] = true" in HIGHLIGHTS
     assert 'region:GetObjectType() == "FontString"' in HIGHLIGHTS
     assert 'child:GetObjectType() == "StatusBar"' in HIGHLIGHTS
-    assert 'SetCVar(FRIENDLY_NAMEPLATE_CVAR, "1")' in HIGHLIGHTS
-    assert "self.previousFriendlyNameplates" in HIGHLIGHTS
+    assert "SetCVar" not in HIGHLIGHTS
+    assert "GetCVar" not in HIGHLIGHTS
+    assert "forceNameplatesCheck" not in UI
+    assert "placas amistosas visibles" in UI
 
     options = UI.split("function UI:CreateOptionsPanel", 1)[1].split(
         "function UI:ShowTab", 1

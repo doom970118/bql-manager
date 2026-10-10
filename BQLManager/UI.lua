@@ -1433,7 +1433,7 @@ function UI:CreateOptionsPanel(parent)
     local description = CreateText(
         panel,
         "GameFontHighlightSmall",
-        "Resalta localmente la barra y muestra un icono sobre el jugador relacionado contigo en la ronda actual.",
+        "Resalta localmente las placas amistosas visibles y muestra un icono sobre el jugador relacionado contigo en la ronda actual.",
         "TOPLEFT",
         panel,
         "TOPLEFT",
@@ -1451,15 +1451,7 @@ function UI:CreateOptionsPanel(parent)
     end)
     self.biteHighlightsCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -78)
 
-    self.forceNameplatesCheck = CreateCheck(panel, "Activar placas amistosas durante el encuentro", function(button)
-        Addon.db.options.forceFriendlyNameplates = button:GetChecked() and true or false
-        if Addon.BiteHighlights then
-            Addon.BiteHighlights:RefreshNow()
-        end
-    end)
-    self.forceNameplatesCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -108)
-
-    CreateSectionTitle(panel, "Probar las mordidas", 16, -158)
+    CreateSectionTitle(panel, "Probar las mordidas", 16, -128)
     local testHelp = CreateText(
         panel,
         "GameFontDisableSmall",
@@ -1468,12 +1460,12 @@ function UI:CreateOptionsPanel(parent)
         panel,
         "TOPLEFT",
         18,
-        -190
+        -160
     )
     testHelp:SetWidth(760)
     testHelp:SetJustifyH("LEFT")
 
-    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 18, -230)
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 18, -200)
     self.highlightSourceSelector = CreateRosterSlotSelector(panel, 220, function(slot)
         UI.highlightTestSourceSlot = slot
         if UI.highlightTestTargetSlot == slot then
@@ -1483,16 +1475,16 @@ function UI:CreateOptionsPanel(parent)
     end, nil, function(slot)
         return UI:IsHighlightTestSlotAvailable(slot)
     end, true)
-    self.highlightSourceSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -249)
+    self.highlightSourceSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -219)
 
-    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 270, -230)
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 270, -200)
     self.highlightTargetSelector = CreateRosterSlotSelector(panel, 220, function(slot)
         UI.highlightTestTargetSlot = slot
         UI:RefreshOptions()
     end, nil, function(slot)
         return UI:IsHighlightTestSlotAvailable(slot) and slot ~= UI.highlightTestSourceSlot
     end, true)
-    self.highlightTargetSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -249)
+    self.highlightTargetSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -219)
 
     self.highlightTestButton = CreateButton(panel, "Probar", 100, 24, function()
         UI:EnsureHighlightTestSlots()
@@ -1501,7 +1493,7 @@ function UI:CreateOptionsPanel(parent)
         end
         UI:RefreshOptions()
     end)
-    self.highlightTestButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 520, -247)
+    self.highlightTestButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 520, -217)
 
     self.highlightStopButton = CreateButton(panel, "Detener prueba", 120, 24, function()
         if Addon.BiteHighlights then
@@ -1510,11 +1502,11 @@ function UI:CreateOptionsPanel(parent)
     end)
     self.highlightStopButton:SetPoint("LEFT", self.highlightTestButton, "RIGHT", 6, 0)
 
-    self.highlightTestStatus = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -292)
+    self.highlightTestStatus = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -262)
     self.highlightTestStatus:SetWidth(760)
     self.highlightTestStatus:SetJustifyH("LEFT")
 
-    CreateSectionTitle(panel, "Significado visual", 16, -338)
+    CreateSectionTitle(panel, "Significado visual", 16, -308)
     local legend = CreateText(
         panel,
         "GameFontHighlightSmall",
@@ -1523,7 +1515,7 @@ function UI:CreateOptionsPanel(parent)
         panel,
         "TOPLEFT",
         18,
-        -370
+        -340
     )
     legend:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 end
@@ -1755,7 +1747,6 @@ function UI:RefreshOptions()
     end
     self:EnsureHighlightTestSlots()
     self.biteHighlightsCheck:SetChecked(Addon.db.options.biteHighlights)
-    self.forceNameplatesCheck:SetChecked(Addon.db.options.forceFriendlyNameplates)
     self:SetRosterSlotSelectorValue(self.highlightSourceSelector, self.highlightTestSourceSlot)
     self:SetRosterSlotSelectorValue(self.highlightTargetSelector, self.highlightTestTargetSlot)
 
