@@ -38,6 +38,12 @@ def main() -> None:
     assert "record.name = member.name" in assignment
     assert "record.spec = specId" in assignment
     assert 'inferred and "manual" or member.specSource' in assignment
+    assert "self:GetGroupUnitForName(member.name)" in assignment
+    assert "UnitClass(unit)" in assignment
+    assert "self:IsUnitInInspectRange(unit)" in assignment
+    assert "self.pendingRosterAssignments[key]" in assignment
+    assert "self:QueueInspectUnit(unit, true)" in assignment
+    assert "normalizedVerifiedSpec and not self:IsSpecAllowedForSlot" in assignment
 
     clear_slot = CORE.split("function Addon:ClearRosterSlot", 1)[1].split(
         "function Addon:AssignGuildMemberToSlot", 1
@@ -53,6 +59,10 @@ def main() -> None:
     assert "CanInspect" in inspection
     assert "CheckInteractDistance" in inspection
     assert "NotifyInspect(item.unit)" in inspection
+    assert "function Addon:GetGroupUnitForName" in CORE
+    assert "function Addon:IsUnitInInspectRange" in CORE
+    assert "self.pendingRosterAssignments[key]" in inspection
+    assert "self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)" in inspection
     assert "member.inGroup = false" in inspection
     assert "member.inGroup = hasGroup and true or false" in inspection
     assert "not member.inGroup" in inspection
@@ -105,6 +115,15 @@ def main() -> None:
         compatible = [spec_id for spec_id, roles in roles_by_spec.items() if role in roles]
         return (compatible[0], True) if len(compatible) == 1 else ("", False)
 
+    def nearby_assignment(class_roles: set[str], current_spec_roles: set[str] | None, role: str) -> str:
+        if role not in class_roles:
+            return "class_rejected"
+        if current_spec_roles is None:
+            return "inspect_first"
+        if role not in current_spec_roles:
+            return "spec_rejected"
+        return "assigned"
+
     assert eligible(None, "MDPS")
     assert eligible(None, "RDPS")
     assert eligible(None, "HEALER")
@@ -115,6 +134,11 @@ def main() -> None:
     assert not eligible("SHAMAN_RESTORATION", "TANK")
     assert spec_for_slot("SHAMAN_RESTORATION", "RDPS") == ("SHAMAN_ELEMENTAL", True)
     assert spec_for_slot("SHAMAN_RESTORATION", "MDPS") == ("SHAMAN_ENHANCEMENT", True)
+    shaman_roles = {"MDPS", "RDPS", "HEALER"}
+    assert nearby_assignment(shaman_roles, None, "RDPS") == "inspect_first"
+    assert nearby_assignment(shaman_roles, {"HEALER"}, "RDPS") == "spec_rejected"
+    assert nearby_assignment(shaman_roles, {"RDPS"}, "RDPS") == "assigned"
+    assert nearby_assignment(shaman_roles, {"RDPS"}, "TANK") == "class_rejected"
 
     print("Persistent searchable guild roster, class icons, role filters, and inspect cache passed.")
 

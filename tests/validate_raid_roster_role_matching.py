@@ -56,7 +56,8 @@ def main() -> None:
     inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
         "function Addon:ProcessInspectQueue", 1
     )[0]
-    assert "self.verifiedGroupSpecs[self:NormalizeName(pending.name)] = specId" in inspect_ready
+    assert "local key = self:NormalizeName(pending.name)" in inspect_ready
+    assert "self.verifiedGroupSpecs[key] = specId" in inspect_ready
 
     mage = [
         ("MAGE_ARCANE", {"RDPS"}),
