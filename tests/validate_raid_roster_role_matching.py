@@ -47,7 +47,7 @@ def main() -> None:
     assert "incomingTrusted or not existingTrusted" in profiles
 
     inspection = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
-        "function Addon:UpdateAssignedPlayerSpec", 1
+        "function Addon:HandleInspectReady", 1
     )[0]
     assert 'local playerName = UnitName("player")' in inspection
     assert "self.verifiedGroupSpecs[playerKey] = specId" in inspection
@@ -56,7 +56,8 @@ def main() -> None:
     inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
         "function Addon:ProcessInspectQueue", 1
     )[0]
-    assert "self.verifiedGroupSpecs[self:NormalizeName(pending.name)] = specId" in inspect_ready
+    assert "local key = self:NormalizeName(pending.name)" in inspect_ready
+    assert "self.verifiedGroupSpecs[key] = specId" in inspect_ready
 
     mage = [
         ("MAGE_ARCANE", {"RDPS"}),

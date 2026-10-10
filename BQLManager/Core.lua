@@ -43,6 +43,7 @@ Addon.inspectQueue = {}
 Addon.inspectQueued = {}
 Addon.inspectElapsed = 0
 Addon.pendingInspect = nil
+Addon.pendingRosterAssignments = {}
 Addon.autoSyncPending = false
 Addon.autoSyncElapsed = 0
 Addon.AUTO_SYNC_DELAY = 0.25
@@ -52,6 +53,7 @@ Addon.MAX_ADDON_MESSAGE_BYTES = 230
 Addon.SYNC_DISCOVERY_DELAY = 1.0
 Addon.SYNC_REPORT_TIMEOUT = 10.0
 Addon.SYNC_UI_REFRESH_DELAY = 0.08
+Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0
 Addon.syncSequence = 0
 Addon.syncReport = nil
 Addon.outgoingSyncActive = false
@@ -315,11 +317,9 @@ function Addon:IsGuildMemberEligibleForSlot(member, slot)
         return false
     end
 
-    local specId = self:NormalizeSpecId(member.spec)
-    if specId then
-        return self:IsSpecAllowedForSlot(slot, specId)
-    end
-    return self:ClassHasSpecForSlot(member.classKey, slot)
+    local savedSpec = self:GetSpecDefinition(member.spec)
+    local classKey = member.classKey or (savedSpec and savedSpec.classKey)
+    return self:ClassHasSpecForSlot(classKey, slot)
 end
 
 function Addon:GetGuildMemberCandidates(slot, search)
@@ -674,9 +674,49 @@ function Addon:GetCooldownUserAssignment(group, index, field, slot)
     return nil
 end
 
+function Addon:IsCooldownSlotAssignedInOtherFlight(group, index, slot)
+    slot = self:Trim(slot)
+    if slot == "" or (group ~= "flight1" and group ~= "flight2") then
+        return false
+    end
+
+    index = tonumber(index)
+    local otherGroup = group == "flight1" and "flight2" or "flight1"
+    local otherRecords = self.db and self.db.cooldowns and self.db.cooldowns[otherGroup]
+    local otherRecord = index and otherRecords and otherRecords[index]
+    return otherRecord and self:Trim(otherRecord.slot) == slot or false
+end
+
 function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion)
+    index = tonumber(index)
+    local records = self.db and self.db.cooldowns and self.db.cooldowns[group]
+    local record = index and records and records[index]
+    if not record then
+        return false
+    end
+
+    local validField = (group == "threat" and (field == "source" or field == "target"))
+        or (group ~= "threat" and field == "slot")
+    if not validField then
+        return false
+    end
+
+    slot = self:Trim(slot)
+    if slot == "" then
+        return true
+    end
     if not self:IsSlotActive(slot) then
         return false
+    end
+    if field == "slot" and (group == "flight1" or group == "flight2") then
+        if self:IsCooldownSlotAssignedInOtherFlight(group, index, slot) then
+            return false
+        end
+        local otherIndex = self:GetCooldownUserAssignment(group, index, field, slot)
+        if otherIndex and record.slot ~= ""
+            and self:IsCooldownSlotAssignedInOtherFlight(group, otherIndex, record.slot) then
+            return false
+        end
     end
 
     local kind = self:GetCooldownKind(group, index)
@@ -688,12 +728,8 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
         return allowDpsPromotion == true and (role == "MDPS" or role == "RDPS")
     end
 
-    if (group == "threat" and field ~= "source") or (group ~= "threat" and field ~= "slot") then
-        return false
-    end
-
-    local record = self:GetSlotRecord(slot)
-    local spec = record and self:GetSpecDefinition(record.spec)
+    local slotRecord = self:GetSlotRecord(slot)
+    local spec = slotRecord and self:GetSpecDefinition(slotRecord.spec)
     if not spec then
         return false
     end
@@ -721,6 +757,7 @@ function Addon:SetCooldownAssignment(group, index, field, slot)
         return false
     end
     index = tonumber(index)
+    slot = self:Trim(slot)
     local record = index and self.db.cooldowns[group] and self.db.cooldowns[group][index]
     if not record or not self:IsCooldownSlotEligible(group, index, field, slot, true) then
         return false
@@ -776,6 +813,7 @@ function Addon:ClearRosterSlot(slot)
         return false
     end
 
+    self:CancelPendingRosterAssignmentForSlot(slot)
     local record = self.db.roster[slot]
     record.name = ""
     record.spec = ""
@@ -784,7 +822,15 @@ function Addon:ClearRosterSlot(slot)
     return true
 end
 
-function Addon:AssignGuildMemberToSlot(slot, name)
+function Addon:CancelPendingRosterAssignmentForSlot(slot)
+    for key, request in pairs(self.pendingRosterAssignments or {}) do
+        if request.slot == slot then
+            self.pendingRosterAssignments[key] = nil
+        end
+    end
+end
+
+function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClassKey)
     if not self:CanModifyConfiguration() then
         return false
     end
@@ -792,8 +838,53 @@ function Addon:AssignGuildMemberToSlot(slot, name)
         return false
     end
 
+    self:CancelPendingRosterAssignmentForSlot(slot)
     local member = self:GetGuildMemberProfile(name)
+    local unit = member and self:GetGroupUnitForName(member.name) or nil
+    local actualClassKey = verifiedClassKey
+    if not actualClassKey and unit and UnitClass then
+        local _
+        _, actualClassKey = UnitClass(unit)
+    end
+    actualClassKey = strupper(self:Trim(actualClassKey))
+    if not self.CLASSES[actualClassKey] then
+        actualClassKey = nil
+    end
+    if member and unit and actualClassKey then
+        local connected = not UnitIsConnected or UnitIsConnected(unit)
+        member = self:RememberPlayerProfile(member.name, actualClassKey, nil, connected, member.inGuild)
+        member.inGroup = true
+    end
+
     if not self:IsGuildMemberEligibleForSlot(member, slot) then
+        if member and actualClassKey then
+            local class = self.CLASSES[actualClassKey]
+            self:Print(L("No se asignó %s a %s: su clase actual (%s) no es compatible.", member.name, self:GetSlotLabel(slot), class and class.name or actualClassKey))
+        end
+        return false
+    end
+
+    local key = self:NormalizeName(member.name)
+    local normalizedVerifiedSpec = self:NormalizeSpecId(verifiedSpecId)
+    if not normalizedVerifiedSpec and unit and UnitIsUnit and UnitIsUnit(unit, "player") then
+        normalizedVerifiedSpec = self:DetectTalentSpec(actualClassKey, false)
+        if normalizedVerifiedSpec then
+            self.verifiedGroupSpecs[key] = normalizedVerifiedSpec
+        end
+    elseif verifiedSpecId == nil and unit and self:IsUnitInInspectRange(unit) then
+        self.pendingRosterAssignments[key] = {
+            slot = slot,
+            name = member.name,
+            elapsed = 0,
+        }
+        self:QueueInspectUnit(unit, true)
+        self:Print(L("Validando la especialización actual de %s antes de asignar %s...", member.name, self:GetSlotLabel(slot)))
+        return true
+    end
+
+    if normalizedVerifiedSpec and not self:IsSpecAllowedForSlot(slot, normalizedVerifiedSpec) then
+        local spec = self:GetSpecDefinition(normalizedVerifiedSpec)
+        self:Print(L("No se asignó %s a %s: su especialización actual (%s) no es compatible.", member.name, self:GetSlotLabel(slot), spec and spec.name or normalizedVerifiedSpec))
         return false
     end
 
@@ -813,11 +904,19 @@ function Addon:AssignGuildMemberToSlot(slot, name)
         end
     end
 
-    local specId, inferred = self:GetGuildMemberSpecForSlot(member, slot)
+    local specId
+    local inferred = false
+    if normalizedVerifiedSpec then
+        specId = normalizedVerifiedSpec
+    else
+        specId, inferred = self:GetGuildMemberSpecForSlot(member, slot)
+    end
     record.name = member.name
     record.spec = specId
     if specId ~= "" then
-        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, inferred and "role" or member.specSource)
+        local specSource = normalizedVerifiedSpec and ((unit and UnitIsUnit and UnitIsUnit(unit, "player")) and "talents" or "inspect")
+            or (inferred and "manual" or member.specSource)
+        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, specSource)
     end
 
     if specId == "" then
@@ -1088,9 +1187,12 @@ function Addon:FormatCooldownGroup(group)
     local records = self.db.cooldowns[group] or {}
     for _, record in ipairs(records) do
         if group == "threat" then
-            tinsert(parts, L(record.label) .. " " .. self:GetSlotName(record.source) .. " > " .. self:GetSlotName(record.target))
+            local sourceName = record.source and record.source ~= "" and self:GetSlotName(record.source) or L("Sin asignar")
+            local targetName = record.target and record.target ~= "" and self:GetSlotName(record.target) or L("Sin asignar")
+            tinsert(parts, L(record.label) .. " " .. sourceName .. " > " .. targetName)
         else
-            tinsert(parts, L(record.label) .. ": " .. self:GetSlotName(record.slot))
+            local slotName = record.slot and record.slot ~= "" and self:GetSlotName(record.slot) or L("Sin asignar")
+            tinsert(parts, L(record.label) .. ": " .. slotName)
         end
     end
     return table.concat(parts, " / ")
@@ -1647,8 +1749,15 @@ function Addon:GetValidationIssues()
                 if not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
                     AddIssue(L("Destino inválido para %s: debe ser un tanque o la primera mordida.", L(record.label)))
                 end
-            elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
-                AddIssue(L("%s no puede usar %s.", self:GetSlotLabel(record.slot), L(record.label)))
+            else
+                local crossFlightConflict = self:IsCooldownSlotAssignedInOtherFlight(group, index, record.slot)
+                if crossFlightConflict then
+                    if group == "flight2" then
+                        AddIssue(L("%s no puede usar %s en ambos vuelos.", self:GetSlotLabel(record.slot), L(record.label)))
+                    end
+                elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
+                    AddIssue(L("%s no puede usar %s.", self:GetSlotLabel(record.slot), L(record.label)))
+                end
             end
         end
     end
@@ -1761,6 +1870,30 @@ function Addon:GetGroupUnitTokens()
     return units
 end
 
+function Addon:GetGroupUnitForName(name)
+    local key = self:NormalizeName(name)
+    if key == "" or not UnitName then
+        return nil
+    end
+
+    for _, unit in ipairs(self:GetGroupUnitTokens()) do
+        if (not UnitExists or UnitExists(unit)) and self:NormalizeName(UnitName(unit)) == key then
+            return unit
+        end
+    end
+    return nil
+end
+
+function Addon:IsUnitInInspectRange(unit)
+    if not unit or not UnitExists or not UnitExists(unit) or (UnitIsUnit and UnitIsUnit(unit, "player")) then
+        return false
+    end
+
+    local connected = not UnitIsConnected or UnitIsConnected(unit)
+    local inRange = CheckInteractDistance and CheckInteractDistance(unit, 1)
+    return connected and inRange and NotifyInspect ~= nil
+end
+
 function Addon:DetectTalentSpec(classKey, isInspect)
     local class = self.CLASSES[classKey]
     if not class or not GetTalentTabInfo then
@@ -1785,7 +1918,7 @@ function Addon:DetectTalentSpec(classKey, isInspect)
     return class.specs[bestIndex].id
 end
 
-function Addon:QueueInspectUnit(unit)
+function Addon:QueueInspectUnit(unit, prioritize)
     if not unit or not UnitExists or not UnitExists(unit) or (UnitIsUnit and UnitIsUnit(unit, "player")) then
         return
     end
@@ -1793,12 +1926,35 @@ function Addon:QueueInspectUnit(unit)
     local name = UnitName(unit)
     local key = self:NormalizeName(name)
     local member = self:GetGuildMemberProfile(name)
-    if key == "" or not member or not member.inGroup or self.inspectQueued[key] then
+    if key == "" or not member or not member.inGroup then
+        return
+    end
+
+    if self.pendingInspect and self.pendingInspect.key == key then
+        return
+    end
+    if self.inspectQueued[key] then
+        if prioritize then
+            for index, item in ipairs(self.inspectQueue) do
+                if item.key == key then
+                    tremove(self.inspectQueue, index)
+                    tinsert(self.inspectQueue, 1, item)
+                    self.inspectElapsed = 2
+                    break
+                end
+            end
+        end
         return
     end
 
     self.inspectQueued[key] = true
-    tinsert(self.inspectQueue, { unit = unit, name = name, key = key })
+    local item = { unit = unit, name = name, key = key }
+    if prioritize then
+        tinsert(self.inspectQueue, 1, item)
+        self.inspectElapsed = 2
+    else
+        tinsert(self.inspectQueue, item)
+    end
 end
 
 function Addon:RefreshGroupMemberProfiles()
@@ -1829,8 +1985,6 @@ function Addon:RefreshGroupMemberProfiles()
                         member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
                         self.verifiedGroupSpecs[playerKey] = specId
                     end
-                elseif member and member.inGroup and connected then
-                    self:QueueInspectUnit(unit)
                 end
             end
         end
@@ -1841,27 +1995,13 @@ function Addon:RefreshGroupMemberProfiles()
             self.verifiedGroupSpecs[key] = nil
         end
     end
-    self:RefreshUI()
-end
-
-function Addon:UpdateAssignedPlayerSpec(name, specId)
-    if not self:CanModifyConfiguration(true) then
-        return false
-    end
-    local changed = false
-    for _, slot in ipairs(self:GetActiveSlotOrder()) do
-        local record = self.db.roster[slot]
-        if record and self:NormalizeName(record.name) == self:NormalizeName(name) and self:IsSpecAllowedForSlot(slot, specId) then
-            if record.spec ~= specId then
-                record.spec = specId
-                changed = true
-            end
+    for key in pairs(self.pendingRosterAssignments) do
+        local member = self.db.guildMembers[key]
+        if not member or not member.inGroup then
+            self.pendingRosterAssignments[key] = nil
         end
     end
-    if changed then
-        self:ScheduleAutoSync()
-    end
-    return changed
+    self:RefreshUI()
 end
 
 function Addon:HandleInspectReady(guid)
@@ -1870,25 +2010,35 @@ function Addon:HandleInspectReady(guid)
         return
     end
     if UnitGUID and pending.guid and UnitGUID(pending.unit) ~= pending.guid then
+        local replacementUnit = self:GetGroupUnitForName(pending.name)
+        local prioritize = self.pendingRosterAssignments[pending.key] ~= nil
         self.pendingInspect = nil
+        if replacementUnit then
+            self:QueueInspectUnit(replacementUnit, prioritize)
+        end
         return
     end
 
     local _, classKey = UnitClass(pending.unit)
     local specId = classKey and self:DetectTalentSpec(classKey, true) or nil
-    if specId then
-        self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
-        self.verifiedGroupSpecs[self:NormalizeName(pending.name)] = specId
-        self:UpdateAssignedPlayerSpec(pending.name, specId)
-    else
-        self:QueueInspectUnit(pending.unit)
+    if not specId then
+        return
     end
+
+    local assignmentRequest
+    local key = self:NormalizeName(pending.name)
+    self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
+    self.verifiedGroupSpecs[key] = specId
+    assignmentRequest = self.pendingRosterAssignments[key]
+    self.pendingRosterAssignments[key] = nil
 
     self.pendingInspect = nil
     if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
         ClearInspectPlayer()
     end
-    self:RefreshUI()
+    if assignmentRequest then
+        self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)
+    end
 end
 
 function Addon:ProcessInspectQueue(elapsed)
@@ -1896,15 +2046,30 @@ function Addon:ProcessInspectQueue(elapsed)
         return
     end
 
+    local expiredAssignments = {}
+    for key, request in pairs(self.pendingRosterAssignments) do
+        request.elapsed = (request.elapsed or 0) + elapsed
+        if request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT then
+            tinsert(expiredAssignments, key)
+        end
+    end
+    for _, key in ipairs(expiredAssignments) do
+        local request = self.pendingRosterAssignments[key]
+        self.pendingRosterAssignments[key] = nil
+        if request then
+            self:Print(L("No se pudo validar la especialización de %s. Acércate, sal de combate y vuelve a intentarlo.", request.name))
+        end
+    end
     if self.pendingInspect then
         self.pendingInspect.elapsed = (self.pendingInspect.elapsed or 0) + elapsed
         if self.pendingInspect.elapsed >= 6 then
             local unit = self.pendingInspect.unit
+            local key = self.pendingInspect.key
             self.pendingInspect = nil
             if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
                 ClearInspectPlayer()
             end
-            self:QueueInspectUnit(unit)
+            self:QueueInspectUnit(unit, self.pendingRosterAssignments[key] ~= nil)
         end
         return
     end
@@ -1937,6 +2102,7 @@ function Addon:ProcessInspectQueue(elapsed)
                 self.pendingInspect = {
                     unit = item.unit,
                     name = item.name,
+                    key = item.key,
                     guid = UnitGUID and UnitGUID(item.unit) or nil,
                     elapsed = 0,
                 }
@@ -2619,6 +2785,7 @@ Addon.eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 Addon.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 Addon.eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
 Addon.eventFrame:RegisterEvent("INSPECT_READY")
+Addon.eventFrame:RegisterEvent("INSPECT_TALENT_READY")
 
 Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -2648,6 +2815,8 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
         Addon:RefreshGroupMemberProfiles()
     elseif event == "INSPECT_READY" then
         Addon:HandleInspectReady(...)
+    elseif event == "INSPECT_TALENT_READY" then
+        Addon:HandleInspectReady()
     end
 end)
 

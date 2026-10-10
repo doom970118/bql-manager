@@ -26,7 +26,7 @@ def main() -> None:
     ):
         assert snippet in CORE
 
-    assert CORE.count("self:ScheduleAutoSync()") >= 11
+    assert CORE.count("self:ScheduleAutoSync()") >= 10
     assert 'CreateCheck(panel, "Auto-sincronización"' in UI
     assert "Addon:CancelAutoSync()" in UI
     assert "self.autoSyncCheck:SetChecked(Addon.db.options.autoSync)" in UI
