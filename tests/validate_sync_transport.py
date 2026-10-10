@@ -9,10 +9,13 @@ CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 def main() -> None:
     for snippet in (
         'local MESSAGE_SEPARATOR = "@"',
+        'local PACKED_RECORD_SEPARATOR = "|"',
         'string.gsub(value, "@", "%%40")',
+        'string.gsub(value, "|", "%%7C")',
         'table.concat(encoded, MESSAGE_SEPARATOR)',
         "Addon.AUTO_SYNC_DELAY = 0.25",
-        "Addon.ADDON_MESSAGE_INTERVAL = 0.01",
+        "Addon.ADDON_MESSAGE_INTERVAL = 0.03",
+        "Addon.MAX_ADDON_MESSAGE_BYTES = 230",
         "Addon.SYNC_DISCOVERY_DELAY = 1.0",
         "Addon.SYNC_REPORT_TIMEOUT = 10.0",
         'item.kind == "ADDON" and self.ADDON_MESSAGE_INTERVAL',
@@ -21,13 +24,17 @@ def main() -> None:
         "function Addon:CreateSyncId()",
         "function Addon:RegisterSyncResponse(kind, syncId, sender, version, status)",
         "function Addon:ProcessSyncReport(elapsed)",
+        "function Addon:QueuePackedSync(records, syncId, channel, category)",
+        'EncodeMessage({ "PACK", syncId, index, total, payload })',
         'self:QueueSync({ "HELLO", syncId }, channel, "CONTROL")',
-        'self:QueueSync({ "BEGIN", self.DB_VERSION, syncId }, channel, category)',
-        'self:QueueSync({ "END", syncId }, channel, category, true)',
+        '{ "BEGIN", self.DB_VERSION, syncId }',
+        'tinsert(records, { "END", syncId })',
+        "self:QueuePackedSync(records, syncId, channel, category)",
         'kind == "PRESENT" or kind == "ACK"',
         'self:QueueSync({ "PRESENT", fields[2], self.VERSION',
         'self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }',
         "Addon:ReceiveSync(message, sender, channel)",
+        "function Addon:ReceivePackedSync(fields, sender, distribution)",
         "Addon:ProcessSyncReport(elapsed)",
         'self:Print(L("Configuración aplicada por %s.", tostring(sender)))',
     ):
@@ -48,8 +55,10 @@ def main() -> None:
     )
     assert "IsAuthorizedSender" not in receive
     assert "self.receivingSyncId = fields[3]" in receive
+    assert 'kind == "PACK"' in receive
+    assert "self:ReceivePackedSync(fields, sender, distribution)" in receive
 
-    print("WotLK-compatible four-argument transport, discovery, and sync acknowledgements passed.")
+    print("WotLK-compatible packed transport, discovery, and sync acknowledgements passed.")
 
 
 if __name__ == "__main__":

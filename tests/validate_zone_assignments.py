@@ -43,7 +43,7 @@ def main() -> None:
         "function Addon:SetZoneAssignment",
         "self:GetSlotRole(slot) ~= role",
         'self.db.zoneAssignments[otherZoneId] = oldSlot or ""',
-        'self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel, category)',
+        'tinsert(records, { "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" })',
         'kind == "ZPOS"',
     ):
         assert snippet in DEFAULTS or snippet in CORE
