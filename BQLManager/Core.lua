@@ -1689,6 +1689,40 @@ function Addon:GetRaidMembers()
     return members
 end
 
+function Addon:GetAutomaticRaidMemberSpecForSlot(member, slot)
+    if not member or not self:IsSlotActive(slot) then
+        return nil, false
+    end
+
+    local profile = self:GetGuildMemberProfile(member.name)
+    local classKey = strupper(self:Trim((profile and profile.classKey) or member.classFile))
+    local specId = self:NormalizeSpecId(profile and profile.spec)
+    if specId then
+        if self:IsSpecAllowedForSlot(slot, specId) then
+            return specId, true
+        end
+        return nil, false
+    end
+
+    local class = self.CLASSES[classKey]
+    local possibleRoles = {}
+    local roleCount = 0
+    for _, spec in ipairs(class and class.specs or {}) do
+        for role in pairs(spec.roles) do
+            if not possibleRoles[role] then
+                possibleRoles[role] = true
+                roleCount = roleCount + 1
+            end
+        end
+    end
+
+    local slotRole = self:GetSlotRole(slot)
+    if roleCount == 1 and possibleRoles[slotRole] then
+        return "", true
+    end
+    return nil, false
+end
+
 function Addon:GetGroupUnitTokens()
     local units = {}
     local raidCount = GetNumRaidMembers and GetNumRaidMembers() or 0
@@ -1889,6 +1923,14 @@ function Addon:ImportRaidRoster()
         return
     end
 
+    self:RefreshGroupMemberProfiles()
+    for _, member in ipairs(members) do
+        local profile = self:RememberPlayerProfile(member.name, member.classFile, nil, true, nil)
+        if profile then
+            profile.inGroup = true
+        end
+    end
+
     local used = {}
     for _, member in ipairs(members) do
         local slot = self:GetSlotForName(member.name)
@@ -1897,28 +1939,46 @@ function Addon:ImportRaidRoster()
         end
     end
 
-    local nextMember = 1
     local changed = 0
     for _, slot in ipairs(self:GetActiveSlotOrder()) do
         local record = self.db.roster[slot]
         if self:IsPlaceholder(slot, record.name) then
-            local member
-            while nextMember <= #members and not member do
-                local candidate = members[nextMember]
-                nextMember = nextMember + 1
-                if not used[self:NormalizeName(candidate.name)] then
-                    member = candidate
+            local matchedMember
+            local matchedSpec
+            for _, candidate in ipairs(members) do
+                local key = self:NormalizeName(candidate.name)
+                if not used[key] then
+                    local specId, eligible = self:GetAutomaticRaidMemberSpecForSlot(candidate, slot)
+                    if eligible then
+                        matchedMember = candidate
+                        matchedSpec = specId
+                        break
+                    end
                 end
             end
-            if member then
-                record.name = member.name
-                used[self:NormalizeName(member.name)] = true
+            if matchedMember then
+                record.name = matchedMember.name
+                record.spec = matchedSpec or ""
+                used[self:NormalizeName(matchedMember.name)] = true
+                self:RememberRosterPlayer(slot, matchedSpec ~= "" and "raid" or "class")
                 changed = changed + 1
             end
         end
     end
 
-    self:Print("Importación completada: " .. changed .. " puesto(s) rellenados sin sobrescribir asignaciones existentes.")
+    local remaining = 0
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
+        local record = self.db.roster[slot]
+        if self:IsPlaceholder(slot, record.name) then
+            remaining = remaining + 1
+        end
+    end
+
+    local message = "Importación completada: " .. changed .. " puesto(s) rellenados por rol sin sobrescribir asignaciones existentes."
+    if remaining > 0 then
+        message = message .. " " .. remaining .. " puesto(s) siguen vacíos hasta conocer una spec compatible o disponer de un miembro del rol."
+    end
+    self:Print(message)
     if changed > 0 then
         self:ScheduleAutoSync()
     end
