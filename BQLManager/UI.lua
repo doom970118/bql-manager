@@ -948,6 +948,7 @@ function UI:CreateSummaryPanel(parent)
     local announce = CreateButton(panel, "Anunciar plan", 112, 24, function()
         Addon:AnnounceFullPlan()
     end)
+    self.announceButton = announce
     announce:SetPoint("LEFT", reset, "RIGHT", 14, 0)
 
     local sync = CreateButton(panel, "Sincronizar", 104, 24, function()
@@ -1608,10 +1609,13 @@ function UI:RefreshZones()
 end
 
 function UI:RefreshConfigurationLock()
-    local locked = Addon:IsConfigurationLocked()
+    local canEdit = Addon:CanEditConfiguration(true)
+    local encounterLocked = Addon:IsConfigurationLocked()
+    local locked = encounterLocked or not canEdit
     local editableControls = {
         self.startButton,
         self.resetButton,
+        self.announceButton,
         self.syncButton,
         self.importButton,
         self.autoStartCheck,
@@ -1629,15 +1633,22 @@ function UI:RefreshConfigurationLock()
             control:Enable()
         end
     end
-    if locked then
+    if encounterLocked and canEdit then
         self.stopButton:Enable()
-        CloseDropDownMenus()
     else
         self.stopButton:Disable()
+    end
+    if locked then
+        CloseDropDownMenus()
     end
 
     for _, overlay in ipairs(self.configurationLockOverlays) do
         if locked then
+            if canEdit then
+                overlay.notice:SetText("Configuración bloqueada durante el encuentro")
+            else
+                overlay.notice:SetText("Modo lectura · Solo líder/asistente puede modificar")
+            end
             overlay:Show()
         else
             overlay:Hide()
@@ -1694,7 +1705,14 @@ function UI:Refresh()
     end
 
     self.lockCheck:SetChecked(Addon.db.options.locked)
-    if Addon.state.active then
+    local canEdit = Addon:CanEditConfiguration(true)
+    if not canEdit and Addon.state.active then
+        self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave) .. " · Modo lectura")
+        self.statusText:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
+    elseif not canEdit then
+        self.statusText:SetText("Modo lectura · Solo líder/asistente puede modificar")
+        self.statusText:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
+    elseif Addon.state.active then
         self.statusText:SetText("Seguimiento activo · Mordida " .. tostring(Addon.state.currentWave) .. " · Configuración bloqueada")
         self.statusText:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
     else

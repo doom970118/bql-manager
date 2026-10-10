@@ -18,6 +18,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Notas tácticas de posiciones, rango y Sombras enjambradoras.
 - Importación de la banda actual sin destruir asignaciones válidas.
 - Sincronización manual o automática desde el líder de grupo o el líder/asistentes de banda hacia los demás jugadores.
+- Modo de solo lectura para los miembros normales mientras están en grupo o banda; fuera de grupo pueden preparar sus plantillas.
 - Bloqueo de toda la configuración mientras el encuentro está activo, hasta que Lana'thel muera o se pulse `Detener`.
 - Validador de puestos vacíos, jugadores duplicados y conflictos en el árbol.
 

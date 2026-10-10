@@ -10,12 +10,7 @@ def main() -> None:
     permission = CORE.split("function Addon:CanSynchronizeConfiguration", 1)[1].split(
         "\nend", 1
     )[0]
-    for snippet in (
-        "GetNumRaidMembers",
-        "self:CanLeadRaid()",
-        "GetNumPartyMembers",
-        "IsPartyLeader and IsPartyLeader()",
-    ):
+    for snippet in ("self:GetAddonChannel() ~= nil", "self:CanEditConfiguration(true)"):
         assert snippet in permission
 
     receive = CORE.split("function Addon:ReceiveSync", 1)[1].split(

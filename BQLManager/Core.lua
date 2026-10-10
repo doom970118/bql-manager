@@ -497,14 +497,30 @@ function Addon:IsConfigurationLocked()
     return self.state and self.state.active == true
 end
 
+function Addon:CanEditConfiguration(silent)
+    local allowed = true
+    if GetNumRaidMembers and GetNumRaidMembers() > 0 then
+        allowed = ((IsRaidLeader and IsRaidLeader()) or (IsRaidOfficer and IsRaidOfficer())) and true or false
+    elseif GetNumPartyMembers and GetNumPartyMembers() > 0 then
+        allowed = (IsPartyLeader and IsPartyLeader()) and true or false
+    end
+    if not allowed and not silent then
+        self:Print("Modo lectura: solo el líder o un asistente puede modificar la configuración.")
+    end
+    return allowed
+end
+
 function Addon:CanModifyConfiguration(silent)
-    if not self:IsConfigurationLocked() then
-        return true
+    if not self:CanEditConfiguration(silent) then
+        return false
     end
-    if not silent then
-        self:Print("La configuración está bloqueada durante el encuentro. Usa Detener para editarla.")
+    if self:IsConfigurationLocked() then
+        if not silent then
+            self:Print("La configuración está bloqueada durante el encuentro. Usa Detener para editarla.")
+        end
+        return false
     end
-    return false
+    return true
 end
 
 function Addon:GetSlotRecord(slot)
@@ -1142,12 +1158,16 @@ function Addon:ProcessMessageQueue(elapsed)
 end
 
 function Addon:Announce(message)
+    if not self:CanEditConfiguration(true) then
+        return false
+    end
     local channel = self:GetRaidChannel()
     if channel then
         self:EnqueueChat("[BQL] " .. message, channel)
     else
         self:Print(message)
     end
+    return true
 end
 
 function Addon:Whisper(player, message)
@@ -1180,6 +1200,9 @@ function Addon:AnnounceWave(wave, whisperPlayers)
 end
 
 function Addon:AnnounceFullPlan()
+    if not self:CanEditConfiguration() then
+        return false
+    end
     for wave = 1, 5 do
         local text = self:FormatWave(wave, false)
         if text ~= "" then
@@ -1190,9 +1213,13 @@ function Addon:AnnounceFullPlan()
     self:Announce("Primer vuelo: " .. self:FormatCooldownGroup("flight1"))
     self:Announce("Segundo vuelo: " .. self:FormatCooldownGroup("flight2"))
     self:Announce("MD/Tricks: " .. self:FormatCooldownGroup("threat"))
+    return true
 end
 
 function Addon:StartEncounter(announce)
+    if not self:CanEditConfiguration() then
+        return false
+    end
     if self.state.active then
         self:Print("El encuentro ya está activo. Usa Detener antes de iniciarlo de nuevo.")
         return false
@@ -1214,11 +1241,15 @@ function Addon:StartEncounter(announce)
 end
 
 function Addon:StopEncounter(reason, announce)
+    local canControl = self:CanEditConfiguration(reason == "victory")
+    if reason ~= "victory" and not canControl then
+        return false
+    end
     if not self.state.active then
-        return
+        return false
     end
     self.state.active = false
-    if announce ~= false then
+    if announce ~= false and canControl then
         if reason == "victory" then
             self:Announce("Encuentro completado.")
         else
@@ -1459,7 +1490,7 @@ function Addon:HandleCombatLog(...)
         return
     end
 
-    if not self.state.active and self.db.options.autoStart and self:IsBossName(data.sourceName) then
+    if not self.state.active and self.db.options.autoStart and self:CanEditConfiguration(true) and self:IsBossName(data.sourceName) then
         self:StartEncounter(true)
     end
 
@@ -1937,13 +1968,7 @@ function Addon:CanLeadRaid()
 end
 
 function Addon:CanSynchronizeConfiguration()
-    if GetNumRaidMembers and GetNumRaidMembers() > 0 then
-        return self:CanLeadRaid()
-    end
-    if GetNumPartyMembers and GetNumPartyMembers() > 0 then
-        return IsPartyLeader and IsPartyLeader()
-    end
-    return false
+    return self:GetAddonChannel() ~= nil and self:CanEditConfiguration(true)
 end
 
 function Addon:ScheduleAutoSync()
@@ -2403,7 +2428,7 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
             Addon:ReceiveSync(message, sender, channel)
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
-        if Addon.db and Addon.db.options.autoStart and not Addon.state.active and Addon:IsBossName(UnitName("target")) then
+        if Addon.db and Addon.db.options.autoStart and not Addon.state.active and Addon:CanEditConfiguration(true) and Addon:IsBossName(UnitName("target")) then
             Addon:StartEncounter(true)
         end
     elseif event == "RAID_ROSTER_UPDATE" then
@@ -2411,8 +2436,10 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
         Addon:RefreshUI()
     elseif event == "PARTY_MEMBERS_CHANGED" then
         Addon:RefreshGroupMemberProfiles()
+        Addon:RefreshUI()
     elseif event == "PLAYER_ENTERING_WORLD" then
         Addon:RefreshGroupMemberProfiles()
+        Addon:RefreshUI()
     elseif event == "GUILD_ROSTER_UPDATE" then
         Addon:RefreshGuildRosterCache()
         Addon:RefreshGroupMemberProfiles()
