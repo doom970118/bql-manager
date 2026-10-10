@@ -5,7 +5,7 @@ local L = function(text, ...)
 end
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.14.7"
+Addon.VERSION = "1.14.8"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 
@@ -257,7 +257,7 @@ Addon.DEFAULTS = {
         flight2 = {
             { label = "DSAC", slot = "HEALER1" },
             { label = L("Himno Divino"), slot = "RDPS9" },
-            { label = L("Marea de maná"), slot = "HEALER4" },
+            { label = L("Marea de maná"), slot = "" },
             { label = L("Himno de esperanza"), slot = "HEALER3" },
             { label = L("Tranquilidad"), slot = "RDPS5" },
         },

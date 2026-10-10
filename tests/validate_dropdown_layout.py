@@ -19,7 +19,7 @@ def main() -> None:
 
     reset_calls = re.findall(r"ResetDropDownButtonLayout\(level(?:, iconCoords)?\)", UI)
     standard_resets = len(reset_calls) - 1
-    assert standard_resets == 3, f"Expected three standard menu resets, found {standard_resets}"
+    assert standard_resets == 4, f"Expected four standard menu resets, found {standard_resets}"
 
     spec_selector = UI.split("local function CreateSpecSelector", 1)[1].split(
         "function UI:SetRosterSlotSelectorValue", 1
@@ -31,6 +31,8 @@ def main() -> None:
     roster_selector = UI.split("local function CreateRosterSlotSelector", 1)[1].split(
         "local function CreateNoteInput", 1
     )[0]
+    assert 'info.text = L("Sin asignar")' in roster_selector
+    assert 'callback("")' in roster_selector
     assert "UIDropDownMenu_AddButton(info, level)\n                    ResetDropDownButtonLayout(level, iconCoords)" in roster_selector
 
     zone_selector = UI.split('NextName("ZoneMenu")', 1)[1].split(

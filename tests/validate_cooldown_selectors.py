@@ -24,6 +24,7 @@ def main() -> None:
     assert 'Addon:SetCooldownAssignment("threat", currentIndex, "source", slot)' in cooldown_panel
     assert 'Addon:SetCooldownAssignment("threat", currentIndex, "target", slot)' in cooldown_panel
     assert cooldown_panel.count("Addon:IsCooldownSlotEligible") == 3
+    assert cooldown_panel.count("end, nil, true)") == 3
     assert "self:SetRosterSlotSelectorValue(row.source, record.source)" in refresh
     assert "self:SetRosterSlotSelectorValue(row.target, record.target)" in refresh
     assert "self:SetRosterSlotSelectorValue(row.slot, record.slot)" in refresh
@@ -44,14 +45,25 @@ def main() -> None:
         assert rule in eligibility
     assert 'role == "TANK" or slot == self:GetFirstBiteTarget()' in eligibility
     assert 'role == "MDPS" or role == "RDPS"' in eligibility
-    assert "GetCooldownUserAssignment" not in eligibility
+    assert 'if slot == "" then' in eligibility
+    assert eligibility.index('if slot == "" then') < eligibility.index("self:IsSlotActive(slot)")
+    assert "self:GetCooldownUserAssignment(group, index, field, slot)" in eligibility
+    assert "self:IsCooldownSlotAssignedInOtherFlight(group, otherIndex, record.slot)" in eligibility
 
     assignment_lookup = CORE.split("function Addon:GetCooldownUserAssignment", 1)[1].split(
-        "function Addon:IsCooldownSlotEligible", 1
+        "function Addon:IsCooldownSlotAssignedInOtherFlight", 1
     )[0]
     assert "otherIndex ~= index" in assignment_lookup
     assert "record[field] == slot" in assignment_lookup
     assert "return otherIndex, record" in assignment_lookup
+
+    cross_flight = CORE.split("function Addon:IsCooldownSlotAssignedInOtherFlight", 1)[1].split(
+        "function Addon:IsCooldownSlotEligible", 1
+    )[0]
+    assert 'group ~= "flight1" and group ~= "flight2"' in cross_flight
+    assert 'group == "flight1" and "flight2" or "flight1"' in cross_flight
+    assert "self:Trim(otherRecord.slot) == slot" in cross_flight
+    assert "self:IsCooldownSlotAssignedInOtherFlight(group, index, slot)" in eligibility
 
     setter = CORE.split("function Addon:SetCooldownAssignment", 1)[1].split(
         "function Addon:SetRosterValue", 1
@@ -66,25 +78,52 @@ def main() -> None:
     assert '"target", record.target, false' in CORE
     assert 'local userField = group == "threat" and "source" or "slot"' in CORE
     assert "cooldownGroupNames" in CORE
+    assert 'L("%s no puede usar %s en ambos vuelos."' in CORE
 
     def swap_assignment(records: list[str], row: int, slot: str) -> None:
         old_slot = records[row]
-        for other_row, assigned in enumerate(records):
-            if other_row != row and assigned == slot:
-                records[other_row] = old_slot
-                break
+        if slot:
+            for other_row, assigned in enumerate(records):
+                if other_row != row and assigned == slot:
+                    records[other_row] = old_slot
+                    break
         records[row] = slot
 
     aura = ["MDPS3", "MDPS4", "HEALER1", "HEALER2"]
     swap_assignment(aura, 1, "MDPS3")
     assert aura == ["MDPS4", "MDPS3", "HEALER1", "HEALER2"]
     assert len(aura) == len(set(aura))
+    swap_assignment(aura, 1, "")
+    assert aura == ["MDPS4", "", "HEALER1", "HEALER2"]
+    swap_assignment(aura, 0, "")
+    assert aura == ["", "", "HEALER1", "HEALER2"]
 
     flight1 = ["TANK2", "HEALER3", "HEALER4", "RDPS9", "MDPS8"]
-    flight2 = ["HEALER1", "RDPS9", "HEALER4", "HEALER3", "RDPS5"]
+    flight2 = ["HEALER1", "RDPS9", "", "HEALER3", "RDPS5"]
     swap_assignment(flight1, 3, "HEALER3")
     assert flight1 == ["TANK2", "RDPS9", "HEALER4", "HEALER3", "MDPS8"]
-    assert flight2[2] == "HEALER4"
+    assert flight2[2] == ""
+
+    def available_in_flight(other_flight: list[str], row: int, slot: str) -> bool:
+        return not slot or other_flight[row] != slot
+
+    assert not available_in_flight(flight1, 0, "TANK2")
+    assert available_in_flight(flight1, 0, "HEALER1")
+    assert available_in_flight(flight1, 0, "")
+
+    indirect_flight1 = ["HEALER1", "HEALER2"]
+    indirect_flight2 = ["HEALER3", "HEALER1"]
+    selected_slot = indirect_flight1[1]
+    displaced_slot = indirect_flight1[0]
+    assert indirect_flight2[0] != selected_slot
+    assert indirect_flight2[1] == displaced_slot
+
+    flight1_defaults = DEFAULTS.split("flight1 = {", 1)[1].split("flight2 = {", 1)[0]
+    flight2_defaults = DEFAULTS.split("flight2 = {", 1)[1].split("threat = {", 1)[0]
+    flight1_slots = re.findall(r'slot = "([A-Z0-9]*)"', flight1_defaults)
+    flight2_slots = re.findall(r'slot = "([A-Z0-9]*)"', flight2_defaults)
+    assert len(flight1_slots) == len(flight2_slots) == 5
+    assert all(not left or not right or left != right for left, right in zip(flight1_slots, flight2_slots))
 
     threat_sources = ["RDPS7", "RDPS8", "MDPS1", "MDPS2"]
     swap_assignment(threat_sources, 1, "RDPS7")
@@ -109,7 +148,7 @@ def main() -> None:
     assert targets[0] == promoted
     assert len(targets) == len(set(targets)) == 16
 
-    print("Cooldown selectors, occupied-user swaps, class/spec filters, and first-bite target promotion passed.")
+    print("Cooldown selectors, empty assignments, cross-flight restrictions, occupied-user swaps, class/spec filters, and first-bite target promotion passed.")
 
 
 if __name__ == "__main__":

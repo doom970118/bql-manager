@@ -674,9 +674,49 @@ function Addon:GetCooldownUserAssignment(group, index, field, slot)
     return nil
 end
 
+function Addon:IsCooldownSlotAssignedInOtherFlight(group, index, slot)
+    slot = self:Trim(slot)
+    if slot == "" or (group ~= "flight1" and group ~= "flight2") then
+        return false
+    end
+
+    index = tonumber(index)
+    local otherGroup = group == "flight1" and "flight2" or "flight1"
+    local otherRecords = self.db and self.db.cooldowns and self.db.cooldowns[otherGroup]
+    local otherRecord = index and otherRecords and otherRecords[index]
+    return otherRecord and self:Trim(otherRecord.slot) == slot or false
+end
+
 function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion)
+    index = tonumber(index)
+    local records = self.db and self.db.cooldowns and self.db.cooldowns[group]
+    local record = index and records and records[index]
+    if not record then
+        return false
+    end
+
+    local validField = (group == "threat" and (field == "source" or field == "target"))
+        or (group ~= "threat" and field == "slot")
+    if not validField then
+        return false
+    end
+
+    slot = self:Trim(slot)
+    if slot == "" then
+        return true
+    end
     if not self:IsSlotActive(slot) then
         return false
+    end
+    if field == "slot" and (group == "flight1" or group == "flight2") then
+        if self:IsCooldownSlotAssignedInOtherFlight(group, index, slot) then
+            return false
+        end
+        local otherIndex = self:GetCooldownUserAssignment(group, index, field, slot)
+        if otherIndex and record.slot ~= ""
+            and self:IsCooldownSlotAssignedInOtherFlight(group, otherIndex, record.slot) then
+            return false
+        end
     end
 
     local kind = self:GetCooldownKind(group, index)
@@ -688,12 +728,8 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
         return allowDpsPromotion == true and (role == "MDPS" or role == "RDPS")
     end
 
-    if (group == "threat" and field ~= "source") or (group ~= "threat" and field ~= "slot") then
-        return false
-    end
-
-    local record = self:GetSlotRecord(slot)
-    local spec = record and self:GetSpecDefinition(record.spec)
+    local slotRecord = self:GetSlotRecord(slot)
+    local spec = slotRecord and self:GetSpecDefinition(slotRecord.spec)
     if not spec then
         return false
     end
@@ -721,6 +757,7 @@ function Addon:SetCooldownAssignment(group, index, field, slot)
         return false
     end
     index = tonumber(index)
+    slot = self:Trim(slot)
     local record = index and self.db.cooldowns[group] and self.db.cooldowns[group][index]
     if not record or not self:IsCooldownSlotEligible(group, index, field, slot, true) then
         return false
@@ -1150,9 +1187,12 @@ function Addon:FormatCooldownGroup(group)
     local records = self.db.cooldowns[group] or {}
     for _, record in ipairs(records) do
         if group == "threat" then
-            tinsert(parts, L(record.label) .. " " .. self:GetSlotName(record.source) .. " > " .. self:GetSlotName(record.target))
+            local sourceName = record.source and record.source ~= "" and self:GetSlotName(record.source) or L("Sin asignar")
+            local targetName = record.target and record.target ~= "" and self:GetSlotName(record.target) or L("Sin asignar")
+            tinsert(parts, L(record.label) .. " " .. sourceName .. " > " .. targetName)
         else
-            tinsert(parts, L(record.label) .. ": " .. self:GetSlotName(record.slot))
+            local slotName = record.slot and record.slot ~= "" and self:GetSlotName(record.slot) or L("Sin asignar")
+            tinsert(parts, L(record.label) .. ": " .. slotName)
         end
     end
     return table.concat(parts, " / ")
@@ -1709,8 +1749,15 @@ function Addon:GetValidationIssues()
                 if not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
                     AddIssue(L("Destino inválido para %s: debe ser un tanque o la primera mordida.", L(record.label)))
                 end
-            elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
-                AddIssue(L("%s no puede usar %s.", self:GetSlotLabel(record.slot), L(record.label)))
+            else
+                local crossFlightConflict = self:IsCooldownSlotAssignedInOtherFlight(group, index, record.slot)
+                if crossFlightConflict then
+                    if group == "flight2" then
+                        AddIssue(L("%s no puede usar %s en ambos vuelos.", self:GetSlotLabel(record.slot), L(record.label)))
+                    end
+                elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
+                    AddIssue(L("%s no puede usar %s.", self:GetSlotLabel(record.slot), L(record.label)))
+                end
             end
         end
     end

@@ -142,6 +142,7 @@ local ENGLISH = {
     ["Modo lectura: solo el líder o un asistente puede modificar la configuración."] = "Read-only: only the leader or an assistant can change the configuration.",
     ["La configuración está bloqueada durante el encuentro. Usa Detener para editarla."] = "The configuration is locked during the encounter. Use Stop before editing it.",
     ["%s pasa a ser la primera mordida para la asignación de %s."] = "%s is now the first bite target for the %s assignment.",
+    ["%s no puede usar %s en ambos vuelos."] = "%s cannot use %s in both air phases.",
     ["%s no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro."] = "%s does not have a known specialization yet. Select a compatible specialization; it will be saved for future use.",
     ["Validando la especialización actual de %s antes de asignar %s..."] = "Checking %s's current specialization before assigning %s...",
     ["No se asignó %s a %s: su clase actual (%s) no es compatible."] = "%s was not assigned to %s: their current class (%s) is not compatible.",

@@ -660,7 +660,13 @@ local function CreateSpecSelector(parent, slot)
 end
 
 function UI:SetRosterSlotSelectorValue(selector, slot)
-    selector.value = slot
+    selector.value = slot or ""
+    if selector.allowEmpty and selector.value == "" then
+        selector.label:SetText(L("Sin asignar"))
+        selector.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        selector:SetBackdropBorderColor(0.30, 0.30, 0.36, 1)
+        return
+    end
     if slot == "BOSS" then
         selector.label:SetText("BOSS")
         selector.label:SetTextColor(COLORS.boss[1], COLORS.boss[2], COLORS.boss[3])
@@ -684,11 +690,12 @@ function UI:SetRosterSlotSelectorValue(selector, slot)
     end
 end
 
-local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter, displayName)
+local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter, displayName, allowEmpty)
     local selector = CreateFrame("Button", NextName("SlotSelector"), parent)
     selector:SetWidth(width or 94)
     selector:SetHeight(20)
     selector.displayName = displayName and true or false
+    selector.allowEmpty = allowEmpty and true or false
     SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
 
     selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector, "LEFT", 6, 0)
@@ -707,6 +714,18 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
         UIDropDownMenu_Initialize(selector.menu, function(_, level)
             if level ~= 1 then
                 return
+            end
+            if selector.allowEmpty then
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = L("Sin asignar")
+                info.value = ""
+                info.notCheckable = true
+                info.func = function()
+                    callback("")
+                    CloseDropDownMenus()
+                end
+                UIDropDownMenu_AddButton(info, level)
+                ResetDropDownButtonLayout(level)
             end
             for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
                 if not slotFilter or slotFilter(slot) then
@@ -748,6 +767,8 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
             if self.locked then
                 GameTooltip:AddLine(L("Origen calculado automáticamente."), 0.75, 0.75, 0.75)
             end
+        elseif self.allowEmpty and self.value == "" then
+            GameTooltip:SetText(L("Sin asignar"))
         else
             GameTooltip:SetText(L("Seleccionar puesto"))
         end
@@ -1151,7 +1172,7 @@ function UI:CreateCooldownPanel(parent)
                 Addon:SetCooldownAssignment(currentGroup, currentIndex, "slot", slot)
             end, nil, function(slot)
                 return Addon:IsCooldownSlotEligible(currentGroup, currentIndex, "slot", slot, true)
-            end)
+            end, nil, true)
             row.slot:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 130, rowY + 5)
             row.name = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 228, rowY)
             row.name:SetWidth(145)
@@ -1173,14 +1194,14 @@ function UI:CreateCooldownPanel(parent)
                 Addon:SetCooldownAssignment("threat", currentIndex, "source", slot)
             end, nil, function(slot)
                 return Addon:IsCooldownSlotEligible("threat", currentIndex, "source", slot, true)
-            end)
+            end, nil, true)
             row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 52, rowY + 5)
             row.arrow = CreateText(panel, "GameFontHighlightSmall", ">", "TOPLEFT", panel, "TOPLEFT", x + 142, rowY)
             row.target = CreateRosterSlotSelector(panel, 78, function(slot)
                 Addon:SetCooldownAssignment("threat", currentIndex, "target", slot)
             end, nil, function(slot)
                 return Addon:IsCooldownSlotEligible("threat", currentIndex, "target", slot, true)
-            end)
+            end, nil, true)
             row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 158, rowY + 5)
             row.name = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 248, rowY)
             row.name:SetWidth(130)
@@ -1711,10 +1732,13 @@ function UI:RefreshCooldowns()
         if row.group == "threat" then
             self:SetRosterSlotSelectorValue(row.source, record.source)
             self:SetRosterSlotSelectorValue(row.target, record.target)
-            row.name:SetText(Addon:GetSlotName(record.source) .. " > " .. Addon:GetSlotName(record.target))
+            local sourceName = record.source and record.source ~= "" and Addon:GetSlotName(record.source) or L("Sin asignar")
+            local targetName = record.target and record.target ~= "" and Addon:GetSlotName(record.target) or L("Sin asignar")
+            row.name:SetText(sourceName .. " > " .. targetName)
         else
             self:SetRosterSlotSelectorValue(row.slot, record.slot)
-            row.name:SetText(Addon:GetSlotName(record.slot))
+            local slotName = record.slot and record.slot ~= "" and Addon:GetSlotName(record.slot) or L("Sin asignar")
+            row.name:SetText(slotName)
         end
     end
 end

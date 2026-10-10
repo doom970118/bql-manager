@@ -55,6 +55,13 @@ def main() -> None:
         for index in range(1, 19)
     )
     records.extend(
+        (
+            ["CD", "flight1", 1, "DSAC", "", "", ""],
+            ["CD", "threat", 1, "MD", "", "", "TANK1"],
+            ["CD", "threat", 2, "Tricks", "", "MDPS1", ""],
+        )
+    )
+    records.extend(
         [
             ["ZONE", "MDPS", "Melee detrás de BQL | separados @ rango 8."],
             ["ZONE", "RDPS", "Ranged en semicírculo."],
@@ -99,6 +106,9 @@ def main() -> None:
     assert decoded == expected
     assert any(record[0] == "BITE" for record in decoded)
     assert any(record[0] == "ZPOS" for record in decoded)
+    assert ["CD", "flight1", "1", "DSAC", "", "", ""] in decoded
+    assert ["CD", "threat", "1", "MD", "", "", "TANK1"] in decoded
+    assert ["CD", "threat", "2", "Tricks", "", "MDPS1", ""] in decoded
 
     for snippet in (
         "function Addon:QueuePackedSync(records, syncId, channel, category)",
