@@ -66,3 +66,7 @@ En `Zonas`, haz clic sobre una posición del mapa para elegir un puesto compatib
 En `Cooldowns`, cada selector muestra todos los personajes capaces de usar la habilidad, aunque ya ocupen otra fila del grupo: Aura Mastery admite paladines Holy o Retribution; DSAC, Protection o Holy; Marea de maná, chamanes Restoration; los himnos, sacerdotes; Tranquilidad, druidas; MD, cazadores; y Tricks, pícaros. Si eliges un lanzador ya asignado en ese grupo, ambos puestos se intercambian para evitar duplicados. En MD/Tricks este intercambio solo aplica al origen, por lo que varios lanzadores pueden compartir destino. Los destinos de MD/Tricks pueden ser tanques o la primera mordida. Al seleccionar otro DPS como destino, ese puesto pasa automáticamente a ser la primera mordida y se reconstruye el árbol.
 
 Los anuncios a `RAID_WARNING` requieren ser líder o asistente. Si no lo eres, el addon usa el canal de banda normal.
+
+## Licencia
+
+BQL Manager se distribuye bajo la licencia MIT. Puedes usarlo, copiarlo, modificarlo, redistribuirlo y crear forks, siempre que conserves el aviso de copyright y el texto de la licencia que reconocen a **Doom (Latinos del WoW)** como autor original. Consulta [LICENSE](LICENSE) para ver los términos completos.
