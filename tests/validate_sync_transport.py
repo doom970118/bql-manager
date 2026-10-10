@@ -30,7 +30,12 @@ def main() -> None:
     assert 'distribution ~= "PARTY"' in receive
     assert 'distribution ~= "RAID"' in receive
     assert "not self.db.options.acceptSync" in receive
-    assert "not self:IsAuthorizedSender(sender)" in receive
+    assert 'status = "DISABLED"' in receive
+    assert 'status = "LOCKED"' in receive
+    assert receive.index('kind == "HELLO"') < receive.index(
+        "not self.db.options.acceptSync"
+    )
+    assert "IsAuthorizedSender" not in receive
     assert "self.receivingSyncId = fields[3]" in receive
 
     print("WotLK-compatible four-argument transport, discovery, and sync acknowledgements passed.")

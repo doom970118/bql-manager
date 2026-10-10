@@ -1960,34 +1960,6 @@ function Addon:CanSendAssignmentWhispers()
     return true
 end
 
-function Addon:IsAuthorizedSender(sender)
-    local normalized = self:NormalizeName(sender)
-    local player = UnitName and UnitName("player") or ""
-    if normalized == self:NormalizeName(player) then
-        return true
-    end
-
-    for _, member in ipairs(self:GetRaidMembers()) do
-        if self:NormalizeName(member.name) == normalized then
-            return (member.rank or 0) >= 1
-        end
-    end
-
-    local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
-    for index = 1, partyCount do
-        local unit = "party" .. tostring(index)
-        local name = UnitName and UnitName(unit) or ""
-        if self:NormalizeName(name) == normalized then
-            if UnitIsPartyLeader then
-                return UnitIsPartyLeader(unit) and true or false
-            end
-            local leaderIndex = GetPartyLeaderIndex and GetPartyLeaderIndex() or nil
-            return leaderIndex == index
-        end
-    end
-    return false
-end
-
 function Addon:DiscardQueuedConfigurationSync()
     for index = #self.messageQueue, 1, -1 do
         if self.messageQueue[index].category == "CONFIG" then
@@ -2044,16 +2016,26 @@ function Addon:ProcessSyncReport(elapsed)
         report.discoveryReported = true
         local present = 0
         local locked = 0
+        local disabled = 0
         for _, peer in pairs(report.present) do
             present = present + 1
             if peer.status == "LOCKED" then
                 locked = locked + 1
+            elseif peer.status == "DISABLED" then
+                disabled = disabled + 1
             end
         end
         if present == 0 then
             self:Print("Ningún otro jugador con BQLManager respondió. Revisa versión, grupo y Aceptar sincronización.")
         else
-            local suffix = locked > 0 and ("; " .. tostring(locked) .. " tiene el encuentro activo") or ""
+            local details = {}
+            if locked > 0 then
+                tinsert(details, tostring(locked) .. " tiene el encuentro activo")
+            end
+            if disabled > 0 then
+                tinsert(details, tostring(disabled) .. " no acepta sincronizaciones")
+            end
+            local suffix = #details > 0 and ("; " .. table.concat(details, ", ")) or ""
             self:Print("BQLManager detectado en " .. tostring(present) .. " jugador(es)" .. suffix .. ". Enviando configuración...")
         end
     end
@@ -2160,23 +2142,23 @@ function Addon:ReceiveSync(message, sender, distribution)
         self:RegisterSyncResponse(kind, fields[2], sender, fields[3], fields[4])
         return
     end
-    if not self.db.options.acceptSync then
-        if kind == "HELLO" then
+    if kind == "HELLO" then
+        local status = "READY"
+        if not self.db.options.acceptSync then
+            status = "DISABLED"
+        elseif self:IsConfigurationLocked() then
+            status = "LOCKED"
+        end
+        local channel = distribution or self:GetAddonChannel()
+        if channel then
+            self:QueueSync({ "PRESENT", fields[2], self.VERSION, status }, channel, "CONTROL")
+        end
+        if status == "DISABLED" then
             self:Print("Sincronización ignorada de " .. tostring(sender) .. ": Aceptar sincronización está desactivado.")
         end
         return
     end
-    if not self:IsAuthorizedSender(sender) then
-        if kind == "HELLO" then
-            self:Print("Sincronización ignorada de " .. tostring(sender) .. ": no es líder ni asistente.")
-        end
-        return
-    end
-    if kind == "HELLO" then
-        local channel = distribution or self:GetAddonChannel()
-        if channel then
-            self:QueueSync({ "PRESENT", fields[2], self.VERSION, self:IsConfigurationLocked() and "LOCKED" or "READY" }, channel, "CONTROL")
-        end
+    if not self.db.options.acceptSync then
         return
     end
     local receivingConfiguration = self.receivingSync
