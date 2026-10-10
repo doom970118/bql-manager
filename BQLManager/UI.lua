@@ -1455,7 +1455,7 @@ function UI:CreateOptionsPanel(parent)
     local testHelp = CreateText(
         panel,
         "GameFontDisableSmall",
-        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDIDO en rojo durante 15 segundos.",
+        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDER en rojo durante 15 segundos.",
         "TOPLEFT",
         panel,
         "TOPLEFT",

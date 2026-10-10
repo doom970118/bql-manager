@@ -216,7 +216,7 @@ function Highlights:BuildAssignments()
 
     if self:IsTestActive() then
         self:AddSlotAssignment(assignments, self.testSourceSlot, "biter", L("MORDEDOR"))
-        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", L("MORDIDO"))
+        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", L("MORDER"))
         return assignments
     end
 

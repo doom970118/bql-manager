@@ -37,6 +37,7 @@ def main() -> None:
         'edge.target, "target", L("MUERDE")',
         "edge.target == playerSlot",
         'edge.source, "biter", L("TE MUERDE")',
+        'self.testTargetSlot, "target", L("MORDER")',
     ):
         assert snippet in production
 
