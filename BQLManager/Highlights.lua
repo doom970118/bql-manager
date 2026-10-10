@@ -17,6 +17,7 @@ end
 local UPDATE_INTERVAL = 0.05
 local SCAN_INTERVAL = 0.50
 local TEST_DURATION = 15
+local FRIENDLY_NAMEPLATE_CVAR = "nameplateShowFriends"
 local FALLBACK_BITE_ICON = "Interface\\Icons\\Spell_Shadow_LifeDrain02"
 
 local biteIcon = FALLBACK_BITE_ICON
@@ -43,6 +44,8 @@ Highlights.activeOverlays = setmetatable({}, { __mode = "k" })
 Highlights.testSourceSlot = nil
 Highlights.testTargetSlot = nil
 Highlights.testEndsAt = nil
+Highlights.forcedFriendlyNameplates = false
+Highlights.previousFriendlyNameplates = nil
 Highlights.visualActive = false
 
 local function Now()
@@ -94,6 +97,22 @@ end
 
 function Highlights:IsTestActive()
     return self.testEndsAt ~= nil and Now() < self.testEndsAt
+end
+
+function Highlights:SetFriendlyNameplates(required)
+    if required and not self.forcedFriendlyNameplates then
+        self.previousFriendlyNameplates = GetCVar and GetCVar(FRIENDLY_NAMEPLATE_CVAR) or nil
+        if SetCVar and self.previousFriendlyNameplates ~= "1" then
+            SetCVar(FRIENDLY_NAMEPLATE_CVAR, "1")
+        end
+        self.forcedFriendlyNameplates = true
+    elseif not required and self.forcedFriendlyNameplates then
+        if SetCVar and self.previousFriendlyNameplates ~= nil then
+            SetCVar(FRIENDLY_NAMEPLATE_CVAR, self.previousFriendlyNameplates)
+        end
+        self.previousFriendlyNameplates = nil
+        self.forcedFriendlyNameplates = false
+    end
 end
 
 function Highlights:HideAll()
@@ -197,7 +216,7 @@ function Highlights:BuildAssignments()
 
     if self:IsTestActive() then
         self:AddSlotAssignment(assignments, self.testSourceSlot, "biter", L("MORDEDOR"))
-        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", L("MORDIDO"))
+        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", L("MORDER"))
         return assignments
     end
 
@@ -280,8 +299,9 @@ function Highlights:Update(elapsed)
         end
     end
 
-    local testing = self:IsTestActive()
-    local visualActive = testing or (Addon.db and Addon.db.options.biteHighlights and Addon.state.active)
+    local assignments = self:BuildAssignments()
+    local visualActive = next(assignments) ~= nil
+    self:SetFriendlyNameplates(visualActive)
 
     if not visualActive then
         if self.visualActive then
@@ -301,11 +321,7 @@ function Highlights:Update(elapsed)
     end
     self.scanElapsed = 0
 
-    local assignments = self:BuildAssignments()
     self:HideAll()
-    if not next(assignments) then
-        return
-    end
 
     local nameplates = { WorldFrame:GetChildren() }
     for _, nameplate in ipairs(nameplates) do

@@ -1433,7 +1433,7 @@ function UI:CreateOptionsPanel(parent)
     local description = CreateText(
         panel,
         "GameFontHighlightSmall",
-        "Resalta localmente las placas amistosas visibles y muestra un icono sobre el jugador relacionado contigo en la ronda actual.",
+        "Resalta localmente al jugador relacionado contigo. Las placas amistosas solo se activan durante una prueba o mientras participas en la mordida actual.",
         "TOPLEFT",
         panel,
         "TOPLEFT",
@@ -1455,7 +1455,7 @@ function UI:CreateOptionsPanel(parent)
     local testHelp = CreateText(
         panel,
         "GameFontDisableSmall",
-        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDIDO en rojo durante 15 segundos.",
+        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDER en rojo durante 15 segundos.",
         "TOPLEFT",
         panel,
         "TOPLEFT",
