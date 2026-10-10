@@ -23,7 +23,7 @@ def main() -> None:
         "function Addon:ProcessSyncReport(elapsed)",
         'self:QueueSync({ "HELLO", syncId }, channel, "CONTROL")',
         'self:QueueSync({ "BEGIN", self.DB_VERSION, syncId }, channel, category)',
-        'self:QueueSync({ "END", syncId }, channel, category)',
+        'self:QueueSync({ "END", syncId }, channel, category, true)',
         'kind == "PRESENT" or kind == "ACK"',
         'self:QueueSync({ "PRESENT", fields[2], self.VERSION',
         'self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }',

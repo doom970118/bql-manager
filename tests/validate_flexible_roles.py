@@ -11,13 +11,13 @@ TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
 def main() -> None:
-    assert 'Addon.VERSION = "1.12.7"' in DEFAULTS
+    assert 'Addon.VERSION = "1.12.8"' in DEFAULTS
     assert "Addon.DB_VERSION = 5" in DEFAULTS
     assert 'Addon.ROLE_ORDER = { "TANK", "MDPS", "RDPS", "HEALER" }' in DEFAULTS
     assert "Addon.ROLE_MINIMUMS = { HEALER = 1 }" in DEFAULTS
     assert "Addon.ROLE_MAXIMUMS = { TANK = 2 }" in DEFAULTS
     assert "Addon.MAX_ROSTER_SIZE = 25" in DEFAULTS
-    assert "## Version: 1.12.7" in TOC
+    assert "## Version: 1.12.8" in TOC
 
     slot_block = DEFAULTS.split("Addon.SLOT_ORDER = {", 1)[1].split("}", 1)[0]
     slots = re.findall(r'"([A-Z]+\d+)"', slot_block)

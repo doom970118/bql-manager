@@ -40,8 +40,13 @@ Addon.CHAT_MESSAGE_INTERVAL = 0.22
 Addon.ADDON_MESSAGE_INTERVAL = 0.01
 Addon.SYNC_DISCOVERY_DELAY = 1.0
 Addon.SYNC_REPORT_TIMEOUT = 10.0
+Addon.SYNC_UI_REFRESH_DELAY = 0.08
 Addon.syncSequence = 0
 Addon.syncReport = nil
+Addon.outgoingSyncActive = false
+Addon.pendingManualSync = false
+Addon.syncUIRefreshPending = false
+Addon.syncUIRefreshElapsed = 0
 
 local function DeepCopy(value)
     if type(value) ~= "table" then
@@ -1090,13 +1095,14 @@ function Addon:EnqueueChat(message, channel, target)
     })
 end
 
-function Addon:EnqueueAddon(message, channel, target, category)
+function Addon:EnqueueAddon(message, channel, target, category, completesConfiguration)
     self:EnqueueMessage({
         kind = "ADDON",
         message = tostring(message or ""),
         channel = channel,
         target = target,
         category = category,
+        completesConfiguration = completesConfiguration and true or false,
     })
 end
 
@@ -1123,6 +1129,14 @@ function Addon:ProcessMessageQueue(elapsed)
         if SendAddonMessage and item.channel then
             local target = item.target or (UnitName and UnitName("player")) or ""
             SendAddonMessage(self.MESSAGE_PREFIX, item.message, item.channel, target)
+        end
+    end
+
+    if item.completesConfiguration then
+        self.outgoingSyncActive = false
+        if self.pendingManualSync then
+            self.pendingManualSync = false
+            self:SyncConfiguration(false)
         end
     end
 end
@@ -1959,9 +1973,32 @@ function Addon:ProcessAutoSync(elapsed)
     if self.autoSyncElapsed < self.AUTO_SYNC_DELAY then
         return
     end
+    if self.outgoingSyncActive then
+        return
+    end
 
     self:CancelAutoSync()
     self:SyncConfiguration(true)
+end
+
+function Addon:ScheduleSyncUIRefresh()
+    self.syncUIRefreshPending = true
+    self.syncUIRefreshElapsed = 0
+end
+
+function Addon:ProcessSyncUIRefresh(elapsed)
+    if not self.syncUIRefreshPending then
+        return
+    end
+    self.syncUIRefreshElapsed = self.syncUIRefreshElapsed + elapsed
+    if self.syncUIRefreshElapsed < self.SYNC_UI_REFRESH_DELAY then
+        return
+    end
+    self.syncUIRefreshPending = false
+    self.syncUIRefreshElapsed = 0
+    self:PrepareZoneAssignments()
+    self:RebuildBiteSources()
+    self:RefreshUI(true)
 end
 
 function Addon:CanSendAssignmentWhispers()
@@ -1980,14 +2017,16 @@ function Addon:DiscardQueuedConfigurationSync()
             tremove(self.messageQueue, index)
         end
     end
+    self.outgoingSyncActive = false
+    self.pendingManualSync = false
 end
 
-function Addon:QueueSync(fields, channel, category)
+function Addon:QueueSync(fields, channel, category, completesConfiguration)
     local encoded = {}
     for _, field in ipairs(fields) do
         tinsert(encoded, EscapeField(field))
     end
-    self:EnqueueAddon(table.concat(encoded, MESSAGE_SEPARATOR), channel, nil, category)
+    self:EnqueueAddon(table.concat(encoded, MESSAGE_SEPARATOR), channel, nil, category, completesConfiguration)
 end
 
 function Addon:CreateSyncId()
@@ -2096,9 +2135,21 @@ function Addon:SyncConfiguration(silent)
         return false
     end
 
+    if self.outgoingSyncActive then
+        if silent then
+            self.autoSyncPending = true
+            self.autoSyncElapsed = self.AUTO_SYNC_DELAY
+        else
+            self.pendingManualSync = true
+            self:Print("Hay una sincronización en curso. Se enviará el estado más reciente al terminar.")
+        end
+        return true
+    end
+
     self:CancelAutoSync()
-    self:DiscardQueuedConfigurationSync()
-    self.syncReport = nil
+    if not silent then
+        self.syncReport = nil
+    end
     local syncId = self:CreateSyncId()
     if not silent then
         self.syncReport = {
@@ -2111,6 +2162,7 @@ function Addon:SyncConfiguration(silent)
         self:QueueSync({ "HELLO", syncId }, channel, "CONTROL")
     end
     local category = "CONFIG"
+    self.outgoingSyncActive = true
     self:QueueSync({ "BEGIN", self.DB_VERSION, syncId }, channel, category)
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
@@ -2130,7 +2182,7 @@ function Addon:SyncConfiguration(silent)
     for _, zoneId in ipairs(self.SLOT_ORDER) do
         self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel, category)
     end
-    self:QueueSync({ "END", syncId }, channel, category)
+    self:QueueSync({ "END", syncId }, channel, category, true)
     if not silent then
         self:Print("Sincronización encolada para el grupo.")
     end
@@ -2198,6 +2250,8 @@ function Addon:ReceiveSync(message, sender, distribution)
             self.receivingSync = nil
             self.receivingSyncVersion = nil
             self.receivingSyncId = nil
+            self.syncUIRefreshPending = false
+            self.syncUIRefreshElapsed = 0
             self:PrepareZoneAssignments()
             self:RebuildBiteSources()
             self:RefreshUI(true)
@@ -2218,6 +2272,7 @@ function Addon:ReceiveSync(message, sender, distribution)
         local specId = self:NormalizeSpecId(fields[4])
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
         self:RememberRosterPlayer(slot, "sync")
+        self:ScheduleSyncUIRefresh()
     elseif kind == "BITE" and receivingConfiguration then
         local index = tonumber(fields[2])
         if index and self.db.bites[index] then
@@ -2225,6 +2280,7 @@ function Addon:ReceiveSync(message, sender, distribution)
             if self:IsSlotActive(fields[5]) then
                 self.db.bites[index].target = fields[5]
             end
+            self:ScheduleSyncUIRefresh()
         end
     elseif kind == "CD" and receivingConfiguration then
         local group = fields[2]
@@ -2238,11 +2294,14 @@ function Addon:ReceiveSync(message, sender, distribution)
             else
                 record.slot = fields[5] or record.slot
             end
+            self:ScheduleSyncUIRefresh()
         end
     elseif kind == "ZONE" and receivingConfiguration and self.db.zones[fields[2]] ~= nil then
         self.db.zones[fields[2]] = fields[3] or ""
+        self:ScheduleSyncUIRefresh()
     elseif kind == "ZPOS" and receivingConfiguration and self.ZONE_POSITION_ROLES[fields[2]] then
         self.db.zoneAssignments[fields[2]] = fields[3] or ""
+        self:ScheduleSyncUIRefresh()
     elseif kind == "STATE" then
         self.state.active = tonumber(fields[2]) == 1
         self.state.currentWave = tonumber(fields[3]) or 1
@@ -2253,6 +2312,8 @@ function Addon:ReceiveSync(message, sender, distribution)
             self.receivingSync = nil
             self.receivingSyncVersion = nil
             self.receivingSyncId = nil
+            self.syncUIRefreshPending = false
+            self.syncUIRefreshElapsed = 0
         end
         self:RefreshUI()
     end
@@ -2365,4 +2426,5 @@ Addon.eventFrame:SetScript("OnUpdate", function(_, elapsed)
     Addon:ProcessInspectQueue(elapsed)
     Addon:ProcessAutoSync(elapsed)
     Addon:ProcessSyncReport(elapsed)
+    Addon:ProcessSyncUIRefresh(elapsed)
 end)

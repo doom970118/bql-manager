@@ -34,6 +34,14 @@ def main() -> None:
         assert snippet in sync_refresh
 
     assert "if UI.applyingSyncRefresh then" in UI
+    for snippet in (
+        "function Addon:ScheduleSyncUIRefresh()",
+        "function Addon:ProcessSyncUIRefresh(elapsed)",
+        "Addon.SYNC_UI_REFRESH_DELAY = 0.08",
+        "Addon:ProcessSyncUIRefresh(elapsed)",
+    ):
+        assert snippet in CORE
+    assert CORE.count("self:ScheduleSyncUIRefresh()") >= 5
     print("Completed synchronization force-refreshes focused controls on the visible tab.")
 
 
