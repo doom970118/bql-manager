@@ -68,10 +68,19 @@ def main() -> None:
     assert "self.activeOverlays[overlay] = true" in HIGHLIGHTS
     assert 'region:GetObjectType() == "FontString"' in HIGHLIGHTS
     assert 'child:GetObjectType() == "StatusBar"' in HIGHLIGHTS
-    assert "SetCVar" not in HIGHLIGHTS
-    assert "GetCVar" not in HIGHLIGHTS
+    assert 'SetCVar(FRIENDLY_NAMEPLATE_CVAR, "1")' in HIGHLIGHTS
+    assert "GetCVar(FRIENDLY_NAMEPLATE_CVAR)" in HIGHLIGHTS
+    assert "Addon.db.options.forceFriendlyNameplates" not in HIGHLIGHTS
     assert "forceNameplatesCheck" not in UI
-    assert "placas amistosas visibles" in UI
+    assert "solo se activan durante una prueba" in UI
+
+    update = HIGHLIGHTS.split("function Highlights:Update", 1)[1]
+    assert "local assignments = self:BuildAssignments()" in update
+    assert "local visualActive = next(assignments) ~= nil" in update
+    assert "self:SetFriendlyNameplates(visualActive)" in update
+    assert update.index("self:SetFriendlyNameplates(visualActive)") < update.index(
+        "if not visualActive then"
+    )
 
     options = UI.split("function UI:CreateOptionsPanel", 1)[1].split(
         "function UI:ShowTab", 1
