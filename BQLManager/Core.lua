@@ -17,6 +17,9 @@ local tremove = table.remove
 local tsort = table.sort
 local type = type
 local tostring = tostring
+local L = function(text, ...)
+    return Addon:Text(text, ...)
+end
 local MESSAGE_SEPARATOR = "@"
 local TRUSTED_SPEC_SOURCES = {
     talents = true,
@@ -490,7 +493,7 @@ function Addon:ResetDatabase()
     self:PrepareRoster()
     self:ResetEncounter(false)
     self:RefreshUI()
-    self:Print("Configuración inicial restaurada.")
+    self:Print(L("Configuración inicial restaurada."))
     return true
 end
 
@@ -517,7 +520,7 @@ function Addon:CanEditConfiguration(silent)
         allowed = (IsPartyLeader and IsPartyLeader()) and true or false
     end
     if not allowed and not silent then
-        self:Print("Modo lectura: solo el líder o un asistente puede modificar la configuración.")
+        self:Print(L("Modo lectura: solo el líder o un asistente puede modificar la configuración."))
     end
     return allowed
 end
@@ -528,7 +531,7 @@ function Addon:CanModifyConfiguration(silent)
     end
     if self:IsConfigurationLocked() then
         if not silent then
-            self:Print("La configuración está bloqueada durante el encuentro. Usa Detener para editarla.")
+            self:Print(L("La configuración está bloqueada durante el encuentro. Usa Detener para editarla."))
         end
         return false
     end
@@ -629,11 +632,11 @@ function Addon:GetCooldownKind(group, index)
         return "AURA_MASTERY"
     elseif label == "DSAC" then
         return "DSAC"
-    elseif strfind(label, "Marea", 1, true) then
+    elseif strfind(label, "Marea", 1, true) or strfind(label, "Mana Tide", 1, true) then
         return "MANA_TIDE"
-    elseif strfind(label, "Himno", 1, true) then
+    elseif strfind(label, "Himno", 1, true) or strfind(label, "Hymn", 1, true) then
         return "HYMN"
-    elseif strfind(label, "Tranquilidad", 1, true) then
+    elseif strfind(label, "Tranquilidad", 1, true) or strfind(label, "Tranquility", 1, true) then
         return "TRANQUILITY"
     elseif strupper(label) == "MD" then
         return "MISDIRECTION"
@@ -726,7 +729,7 @@ function Addon:SetCooldownAssignment(group, index, field, slot)
             if not firstBite or not self:SetBiteTarget(firstBite.index, slot) then
                 return false
             end
-            self:Print(self:GetSlotName(slot) .. " pasa a ser la primera mordida para la asignación de " .. tostring(record.label) .. ".")
+            self:Print(L("%s pasa a ser la primera mordida para la asignación de %s.", self:GetSlotName(slot), L(record.label)))
         end
     end
 
@@ -814,7 +817,7 @@ function Addon:AssignGuildMemberToSlot(slot, name)
     end
 
     if specId == "" then
-        self:Print(member.name .. " no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro.")
+        self:Print(L("%s no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro.", member.name))
     end
     self:ScheduleAutoSync()
     self:RefreshUI()
@@ -844,14 +847,14 @@ end
 function Addon:GetSlotReference(slot)
     for index, edge in ipairs(self.db.bites) do
         if edge.source == slot or edge.target == slot then
-            return "mordidas (fila " .. tostring(index) .. ")"
+            return L("mordidas (fila %d)", index)
         end
     end
 
     for group, records in pairs(self.db.cooldowns) do
         for index, record in ipairs(records) do
             if record.slot == slot or record.source == slot or record.target == slot then
-                return "cooldowns (" .. tostring(group) .. " " .. tostring(index) .. ")"
+                return L("cooldowns (%s %d)", tostring(group), index)
             end
         end
     end
@@ -870,11 +873,11 @@ function Addon:AddRosterRole(role)
     local counts = self:GetRoleCounts()
     local maximum = self.ROLE_MAXIMUMS[role]
     if maximum and counts[role] >= maximum then
-        self:Print(role .. " admite como máximo " .. tostring(maximum) .. " puestos.")
+        self:Print(L("%s admite como máximo %d puestos.", role, maximum))
         return false
     end
     if self:GetActiveRosterSize() >= self.MAX_ROSTER_SIZE then
-        self:Print("La plantilla ya tiene " .. tostring(self.MAX_ROSTER_SIZE) .. " puestos. Quita uno antes de añadir otro.")
+        self:Print(L("La plantilla ya tiene %d puestos. Quita uno antes de añadir otro.", self.MAX_ROSTER_SIZE))
         return false
     end
 
@@ -887,7 +890,7 @@ function Addon:AddRosterRole(role)
             if wasPlaceholder then
                 record.name = self:GetSlotLabel(slot)
             end
-            self:Print("Puesto " .. self:GetSlotLabel(slot) .. " añadido. Selecciona una especialización compatible.")
+            self:Print(L("Puesto %s añadido. Selecciona una especialización compatible.", self:GetSlotLabel(slot)))
             self:PrepareZoneAssignments()
             self:ScheduleAutoSync()
             self:RefreshUI()
@@ -909,7 +912,7 @@ function Addon:RemoveRosterRole(role)
     local counts = self:GetRoleCounts()
     local minimum = self.ROLE_MINIMUMS[role] or 0
     if counts[role] <= minimum then
-        self:Print(role .. " debe conservar al menos " .. tostring(minimum) .. " puesto(s).")
+        self:Print(L("%s debe conservar al menos %d puesto(s).", role, minimum))
         return false
     end
 
@@ -925,7 +928,7 @@ function Addon:RemoveRosterRole(role)
 
     local reference = self:GetSlotReference(slot)
     if reference then
-        self:Print("No se puede quitar " .. self:GetSlotLabel(slot) .. " porque todavía se usa en " .. reference .. ".")
+        self:Print(L("No se puede quitar %s porque todavía se usa en %s.", self:GetSlotLabel(slot), reference))
         return false
     end
 
@@ -937,7 +940,7 @@ function Addon:RemoveRosterRole(role)
     if wasPlaceholder then
         record.name = slot
     end
-    self:Print(oldLabel .. " retirado. Su posición queda disponible para otro rol.")
+    self:Print(L("%s retirado. Su posición queda disponible para otro rol.", oldLabel))
     self:PrepareZoneAssignments()
     self:ScheduleAutoSync()
     self:RefreshUI()
@@ -1081,9 +1084,9 @@ function Addon:FormatCooldownGroup(group)
     local records = self.db.cooldowns[group] or {}
     for _, record in ipairs(records) do
         if group == "threat" then
-            tinsert(parts, record.label .. " " .. self:GetSlotName(record.source) .. " > " .. self:GetSlotName(record.target))
+            tinsert(parts, L(record.label) .. " " .. self:GetSlotName(record.source) .. " > " .. self:GetSlotName(record.target))
         else
-            tinsert(parts, record.label .. ": " .. self:GetSlotName(record.slot))
+            tinsert(parts, L(record.label) .. ": " .. self:GetSlotName(record.slot))
         end
     end
     return table.concat(parts, " / ")
@@ -1193,11 +1196,11 @@ end
 function Addon:AnnounceWave(wave, whisperPlayers)
     local text = self:FormatWave(wave, false)
     if text == "" then
-        self:Print("La ronda " .. tostring(wave) .. " no tiene asignaciones.")
+        self:Print(L("La ronda %d no tiene asignaciones.", wave))
         return
     end
 
-    self:Announce("Mordida " .. tostring(wave) .. ": " .. text)
+    self:Announce(L("Mordida %d: %s", wave, text))
 
     if whisperPlayers and self.db.options.whisperAssignments and self:CanSendAssignmentWhispers() and wave > 1 then
         for _, item in ipairs(self:GetWaveEdges(wave)) do
@@ -1205,7 +1208,7 @@ function Addon:AnnounceWave(wave, whisperPlayers)
             local sourceName = self:GetSlotName(edge.source)
             local targetName = self:GetSlotName(edge.target)
             if not self:IsPlaceholder(edge.source, sourceName) then
-                self:Whisper(sourceName, "En la mordida " .. tostring(wave) .. " muerde a " .. targetName .. " (" .. edge.target .. ").")
+                self:Whisper(sourceName, L("En la mordida %d muerde a %s (%s).", wave, targetName, edge.target))
             end
         end
     end
@@ -1218,12 +1221,12 @@ function Addon:AnnounceFullPlan()
     for wave = 1, 5 do
         local text = self:FormatWave(wave, false)
         if text ~= "" then
-            self:Announce("Mordida " .. tostring(wave) .. ": " .. text)
+            self:Announce(L("Mordida %d: %s", wave, text))
         end
     end
     self:Announce("Aura Mastery: " .. self:FormatCooldownGroup("aura"))
-    self:Announce("Primer vuelo: " .. self:FormatCooldownGroup("flight1"))
-    self:Announce("Segundo vuelo: " .. self:FormatCooldownGroup("flight2"))
+    self:Announce(L("Primer vuelo: %s", self:FormatCooldownGroup("flight1")))
+    self:Announce(L("Segundo vuelo: %s", self:FormatCooldownGroup("flight2")))
     self:Announce("MD/Tricks: " .. self:FormatCooldownGroup("threat"))
     return true
 end
@@ -1233,7 +1236,7 @@ function Addon:StartEncounter(announce)
         return false
     end
     if self.state.active then
-        self:Print("El encuentro ya está activo. Usa Detener antes de iniciarlo de nuevo.")
+        self:Print(L("El encuentro ya está activo. Usa Detener antes de iniciarlo de nuevo."))
         return false
     end
     self:CancelAutoSync()
@@ -1244,7 +1247,7 @@ function Addon:StartEncounter(announce)
     self.state.startedAt = GetTime and GetTime() or 0
     self.state.initialBiteDetected = false
     if announce ~= false then
-        self:Announce("Seguimiento iniciado.")
+        self:Announce(L("Seguimiento iniciado."))
         self:AnnounceWave(1, false)
     end
     self:BroadcastState()
@@ -1263,9 +1266,9 @@ function Addon:StopEncounter(reason, announce)
     self.state.active = false
     if announce ~= false and canControl then
         if reason == "victory" then
-            self:Announce("Encuentro completado.")
+            self:Announce(L("Encuentro completado."))
         else
-            self:Announce("Seguimiento detenido.")
+            self:Announce(L("Seguimiento detenido."))
         end
     end
     self:BroadcastState()
@@ -1283,7 +1286,7 @@ function Addon:ResetEncounter(announce)
     self.state.startedAt = nil
     self.state.initialBiteDetected = false
     if announce then
-        self:Announce("Progreso de mordidas reiniciado.")
+        self:Announce(L("Progreso de mordidas reiniciado."))
     end
     self:BroadcastState()
     self:RefreshUI()
@@ -1335,7 +1338,7 @@ function Addon:AdvanceWaveIfComplete()
     end
 
     if wave >= 5 then
-        self:Announce("Árbol de mordidas completado.")
+        self:Announce(L("Árbol de mordidas completado."))
         self.state.currentWave = 5
         self:BroadcastState()
         self:RefreshUI()
@@ -1364,7 +1367,7 @@ function Addon:MarkBite(sourceName, targetName)
         local sourceMatches = not sourceSlot or edge.source == sourceSlot or edge.source == "BOSS"
         if not self.state.completed[item.index] and edge.target == targetSlot and sourceMatches then
             self.state.completed[item.index] = true
-            self:Print("Mordida registrada: " .. self:GetSlotName(edge.source) .. " > " .. self:GetSlotName(edge.target) .. ".")
+            self:Print(L("Mordida registrada: %s > %s.", self:GetSlotName(edge.source), self:GetSlotName(edge.target)))
             self:AdvanceWaveIfComplete()
             self:RefreshUI()
             return true
@@ -1389,20 +1392,20 @@ function Addon:DetectInitialBossBite(sourceName, targetName)
     self.state.initialBiteDetected = true
     local targetSlot = self:GetSlotForName(targetName)
     if not targetSlot then
-        self:Print("Primera mordida detectada en " .. tostring(targetName) .. ", pero ese personaje no está en la plantilla. El árbol no se modificó.")
+        self:Print(L("Primera mordida detectada en %s, pero ese personaje no está en la plantilla. El árbol no se modificó.", tostring(targetName)))
         return false
     end
 
     local plannedSlot = firstBite.edge.target
     if not self:SetBiteTarget(firstBite.index, targetSlot, true, true) then
-        self:Print("No se pudo adaptar el árbol a la primera mordida de " .. tostring(targetName) .. ".")
+        self:Print(L("No se pudo adaptar el árbol a la primera mordida de %s.", tostring(targetName)))
         return false
     end
 
     if plannedSlot ~= targetSlot then
-        self:Print("Primera mordida real: " .. self:GetSlotName(targetSlot) .. " (" .. self:GetSlotLabel(targetSlot) .. "). Árbol actualizado automáticamente.")
+        self:Print(L("Primera mordida real: %s (%s). Árbol actualizado automáticamente.", self:GetSlotName(targetSlot), self:GetSlotLabel(targetSlot)))
     else
-        self:Print("Primera mordida confirmada: " .. self:GetSlotName(targetSlot) .. " (" .. self:GetSlotLabel(targetSlot) .. ").")
+        self:Print(L("Primera mordida confirmada: %s (%s).", self:GetSlotName(targetSlot), self:GetSlotLabel(targetSlot)))
     end
     return true
 end
@@ -1422,9 +1425,9 @@ function Addon:WarnFrenzy(playerName)
         if edge.source == slot and not self.state.completed[item.index] then
             local targetName = self:GetSlotName(edge.target)
             if self.db.options.whisperAssignments and self:CanSendAssignmentWhispers() then
-                self:Whisper(playerName, "¡MUERDE AHORA a " .. targetName .. " (" .. edge.target .. ")!")
+                self:Whisper(playerName, L("¡MUERDE AHORA a %s (%s)!", targetName, edge.target))
             end
-            self:Print(playerName .. " debe morder a " .. targetName .. ".")
+            self:Print(L("%s debe morder a %s.", playerName, targetName))
             return
         end
     end
@@ -1528,14 +1531,14 @@ function Addon:GetValidationIssues()
 
     local activeSlots = self:GetActiveSlotOrder()
     if #activeSlots ~= self.MAX_ROSTER_SIZE then
-        AddIssue("La plantilla tiene " .. tostring(#activeSlots) .. " de " .. tostring(self.MAX_ROSTER_SIZE) .. " puestos activos.")
+        AddIssue(L("La plantilla tiene %d de %d puestos activos.", #activeSlots, self.MAX_ROSTER_SIZE))
     end
     local roleCounts = self:GetRoleCounts()
     if roleCounts.TANK > (self.ROLE_MAXIMUMS.TANK or 2) then
-        AddIssue("La plantilla no puede tener más de dos tanques.")
+        AddIssue(L("La plantilla no puede tener más de dos tanques."))
     end
     if roleCounts.HEALER < (self.ROLE_MINIMUMS.HEALER or 1) then
-        AddIssue("La plantilla debe conservar al menos un healer.")
+        AddIssue(L("La plantilla debe conservar al menos un healer."))
     end
 
     local names = {}
@@ -1543,16 +1546,16 @@ function Addon:GetValidationIssues()
         local record = self.db.roster[slot]
         local name = record and self:Trim(record.name) or ""
         if not record or not self:GetSpecDefinition(record.spec) then
-            AddIssue(self:GetSlotLabel(slot) .. " no tiene una especialización válida seleccionada.")
+            AddIssue(L("%s no tiene una especialización válida seleccionada.", self:GetSlotLabel(slot)))
         elseif not self:IsSpecAllowedForSlot(slot, record.spec) then
-            AddIssue(self:GetSlotLabel(slot) .. " tiene una especialización incompatible con su función.")
+            AddIssue(L("%s tiene una especialización incompatible con su función.", self:GetSlotLabel(slot)))
         end
         if self:IsPlaceholder(slot, name) then
-            AddIssue(self:GetSlotLabel(slot) .. " no tiene un personaje asignado.")
+            AddIssue(L("%s no tiene un personaje asignado.", self:GetSlotLabel(slot)))
         else
             local normalized = self:NormalizeName(name)
             if names[normalized] then
-                AddIssue(name .. " está asignado a " .. names[normalized] .. " y " .. self:GetSlotLabel(slot) .. ".")
+                AddIssue(L("%s está asignado a %s y %s.", name, names[normalized], self:GetSlotLabel(slot)))
             else
                 names[normalized] = self:GetSlotLabel(slot)
             end
@@ -1565,7 +1568,7 @@ function Addon:GetValidationIssues()
     for wave = 1, 5 do
         local edges = self:GetWaveEdges(wave)
         if #edges ~= expectedByWave[wave] then
-            AddIssue("La mordida " .. wave .. " tiene " .. #edges .. " asignaciones; debe tener " .. expectedByWave[wave] .. ".")
+            AddIssue(L("La mordida %d tiene %d asignaciones; debe tener %d.", wave, #edges, expectedByWave[wave]))
         end
 
         local sources = {}
@@ -1575,32 +1578,32 @@ function Addon:GetValidationIssues()
             local edge = item.edge
             if wave == 1 then
                 if edge.source ~= "BOSS" then
-                    AddIssue("La primera mordida debe salir de BOSS.")
+                    AddIssue(L("La primera mordida debe salir de BOSS."))
                 end
             else
                 local expectedSource = infectedOrder[position]
                 if edge.source ~= expectedSource then
-                    AddIssue("El origen de la fila " .. item.index .. " debe ser " .. tostring(expectedSource) .. " según el orden automático.")
+                    AddIssue(L("El origen de la fila %d debe ser %s según el orden automático.", item.index, tostring(expectedSource)))
                 end
                 if not self:IsSlotActive(edge.source) then
-                    AddIssue("Origen de mordida inválido: " .. tostring(edge.source) .. ".")
+                    AddIssue(L("Origen de mordida inválido: %s.", tostring(edge.source)))
                 elseif not infected[edge.source] then
-                    AddIssue(edge.source .. " muerde en la ronda " .. wave .. " sin haber sido mordido antes.")
+                    AddIssue(L("%s muerde en la ronda %d sin haber sido mordido antes.", edge.source, wave))
                 end
                 if sources[edge.source] then
-                    AddIssue(edge.source .. " aparece dos veces como origen en la mordida " .. wave .. ".")
+                    AddIssue(L("%s aparece dos veces como origen en la mordida %d.", edge.source, wave))
                 end
                 sources[edge.source] = true
             end
 
             if not self:IsSlotActive(edge.target) then
-                AddIssue("Destino de mordida inválido: " .. tostring(edge.target) .. ".")
+                AddIssue(L("Destino de mordida inválido: %s.", tostring(edge.target)))
             else
                 if infected[edge.target] then
-                    AddIssue(edge.target .. " recibe otra mordida después de estar infectado.")
+                    AddIssue(L("%s recibe otra mordida después de estar infectado.", edge.target))
                 end
                 if newTargets[edge.target] then
-                    AddIssue(edge.target .. " recibe dos mordidas en la ronda " .. wave .. ".")
+                    AddIssue(L("%s recibe dos mordidas en la ronda %d.", edge.target, wave))
                 elseif not infected[edge.target] then
                     tinsert(newTargetOrder, edge.target)
                 end
@@ -1616,8 +1619,8 @@ function Addon:GetValidationIssues()
 
     local cooldownGroupNames = {
         aura = "Aura Mastery",
-        flight1 = "Primer vuelo",
-        flight2 = "Segundo vuelo",
+        flight1 = L("Primer vuelo"),
+        flight2 = L("Segundo vuelo"),
         threat = "MD/Tricks",
     }
     for group, records in pairs(self.db.cooldowns) do
@@ -1627,7 +1630,7 @@ function Addon:GetValidationIssues()
             local userSlot = record[userField]
             if userSlot and userSlot ~= "" then
                 if assignedUsers[userSlot] then
-                    AddIssue(self:GetSlotLabel(userSlot) .. " está asignado más de una vez en " .. (cooldownGroupNames[group] or tostring(group)) .. ".")
+                    AddIssue(L("%s está asignado más de una vez en %s.", self:GetSlotLabel(userSlot), cooldownGroupNames[group] or tostring(group)))
                 else
                     assignedUsers[userSlot] = true
                 end
@@ -1635,13 +1638,13 @@ function Addon:GetValidationIssues()
 
             if group == "threat" then
                 if not self:IsCooldownSlotEligible(group, index, "source", record.source, false) then
-                    AddIssue(self:GetSlotLabel(record.source) .. " no puede lanzar " .. tostring(record.label) .. ".")
+                    AddIssue(L("%s no puede lanzar %s.", self:GetSlotLabel(record.source), L(record.label)))
                 end
                 if not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
-                    AddIssue("Destino inválido para " .. tostring(record.label) .. ": debe ser un tanque o la primera mordida.")
+                    AddIssue(L("Destino inválido para %s: debe ser un tanque o la primera mordida.", L(record.label)))
                 end
             elseif not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
-                AddIssue(self:GetSlotLabel(record.slot) .. " no puede usar " .. tostring(record.label) .. ".")
+                AddIssue(L("%s no puede usar %s.", self:GetSlotLabel(record.slot), L(record.label)))
             end
         end
     end
@@ -1652,11 +1655,11 @@ function Addon:GetValidationIssues()
         local role = self.ZONE_POSITION_ROLES[zoneId]
         if slot ~= "" then
             if not self:IsSlotActive(slot) then
-                AddIssue("Puesto inválido en la zona " .. zoneId .. ": " .. tostring(slot) .. ".")
+                AddIssue(L("Puesto inválido en la zona %s: %s.", zoneId, tostring(slot)))
             elseif self:GetSlotRole(slot) ~= role then
-                AddIssue(self:GetSlotLabel(slot) .. " no corresponde a una zona " .. role .. ".")
+                AddIssue(L("%s no corresponde a una zona %s.", self:GetSlotLabel(slot), role))
             elseif positioned[slot] then
-                AddIssue(self:GetSlotLabel(slot) .. " aparece en dos posiciones del mapa.")
+                AddIssue(L("%s aparece en dos posiciones del mapa.", self:GetSlotLabel(slot)))
             else
                 positioned[slot] = zoneId
             end
@@ -1669,11 +1672,11 @@ end
 function Addon:ValidateAndReport()
     local issues = self:GetValidationIssues()
     if #issues == 0 then
-        self:Print("Validación correcta: no se detectaron conflictos.")
+        self:Print(L("Validación correcta: no se detectaron conflictos."))
         return true
     end
 
-    self:Print("Validación: " .. #issues .. " problema(s).")
+    self:Print(L("Validación: %d problema(s).", #issues))
     for index, issue in ipairs(issues) do
         self:Print(tostring(index) .. ". " .. issue)
     end
@@ -1947,7 +1950,7 @@ function Addon:ImportRaidRoster()
     end
     local members = self:GetRaidMembers()
     if #members == 0 then
-        self:Print("No hay una banda activa para importar.")
+        self:Print(L("No hay una banda activa para importar."))
         return
     end
 
@@ -2002,9 +2005,9 @@ function Addon:ImportRaidRoster()
         end
     end
 
-    local message = "Importación completada: " .. changed .. " puesto(s) rellenados por rol sin sobrescribir asignaciones existentes."
+    local message = L("Importación completada: %d puesto(s) rellenados por rol sin sobrescribir asignaciones existentes.", changed)
     if remaining > 0 then
-        message = message .. " " .. remaining .. " puesto(s) siguen vacíos hasta conocer una spec compatible o disponer de un miembro del rol."
+        message = message .. " " .. L("%d puesto(s) siguen vacíos hasta conocer una spec compatible o disponer de un miembro del rol.", remaining)
     end
     self:Print(message)
     if changed > 0 then
@@ -2170,7 +2173,7 @@ function Addon:RegisterSyncResponse(kind, syncId, sender, version, status)
         local firstAcknowledgement = not report.acknowledged[key]
         report.acknowledged[key] = true
         if firstAcknowledgement then
-            self:Print("Configuración aplicada por " .. tostring(sender) .. ".")
+            self:Print(L("Configuración aplicada por %s.", tostring(sender)))
         end
     end
 end
@@ -2196,17 +2199,17 @@ function Addon:ProcessSyncReport(elapsed)
             end
         end
         if present == 0 then
-            self:Print("Ningún otro jugador con BQLManager respondió. Revisa versión, grupo y Aceptar sincronización.")
+            self:Print(L("Ningún otro jugador con BQLManager respondió. Revisa versión, grupo y Aceptar sincronización."))
         else
             local details = {}
             if locked > 0 then
-                tinsert(details, tostring(locked) .. " tiene el encuentro activo")
+                tinsert(details, L("%d tiene(n) el encuentro activo", locked))
             end
             if disabled > 0 then
-                tinsert(details, tostring(disabled) .. " no acepta sincronizaciones")
+                tinsert(details, L("%d no acepta(n) sincronizaciones", disabled))
             end
             local suffix = #details > 0 and ("; " .. table.concat(details, ", ")) or ""
-            self:Print("BQLManager detectado en " .. tostring(present) .. " jugador(es)" .. suffix .. ". Enviando configuración...")
+            self:Print(L("BQLManager detectado en %d jugador(es)%s. Enviando configuración...", present, suffix))
         end
     end
 
@@ -2223,9 +2226,9 @@ function Addon:ProcessSyncReport(elapsed)
         acknowledged = acknowledged + 1
     end
     if acknowledged > 0 then
-        self:Print("Sincronización aplicada y confirmada por " .. tostring(acknowledged) .. " de " .. tostring(present) .. " jugador(es) detectados.")
+        self:Print(L("Sincronización aplicada y confirmada por %d de %d jugador(es) detectados.", acknowledged, present))
     elseif present > 0 then
-        self:Print("Los clientes respondieron, pero ninguno confirmó la configuración completa.")
+        self:Print(L("Los clientes respondieron, pero ninguno confirmó la configuración completa."))
     end
     self.syncReport = nil
 end
@@ -2237,13 +2240,13 @@ function Addon:SyncConfiguration(silent)
     local channel = self:GetAddonChannel()
     if not channel then
         if not silent then
-            self:Print("Debes estar en grupo o banda para sincronizar.")
+            self:Print(L("Debes estar en grupo o banda para sincronizar."))
         end
         return false
     end
     if not self:CanSynchronizeConfiguration() then
         if not silent then
-            self:Print("Solo el líder o un asistente puede sincronizar la configuración.")
+            self:Print(L("Solo el líder o un asistente puede sincronizar la configuración."))
         end
         return false
     end
@@ -2254,7 +2257,7 @@ function Addon:SyncConfiguration(silent)
             self.autoSyncElapsed = self.AUTO_SYNC_DELAY
         else
             self.pendingManualSync = true
-            self:Print("Hay una sincronización en curso. Se enviará el estado más reciente al terminar.")
+            self:Print(L("Hay una sincronización en curso. Se enviará el estado más reciente al terminar."))
         end
         return true
     end
@@ -2297,7 +2300,7 @@ function Addon:SyncConfiguration(silent)
     end
     self:QueueSync({ "END", syncId }, channel, category, true)
     if not silent then
-        self:Print("Sincronización encolada para el grupo.")
+        self:Print(L("Sincronización encolada para el grupo."))
     end
     return true
 end
@@ -2337,7 +2340,7 @@ function Addon:ReceiveSync(message, sender, distribution)
             self:QueueSync({ "PRESENT", fields[2], self.VERSION, status }, channel, "CONTROL")
         end
         if status == "DISABLED" then
-            self:Print("Sincronización ignorada de " .. tostring(sender) .. ": Aceptar sincronización está desactivado.")
+            self:Print(L("Sincronización ignorada de %s: Aceptar sincronización está desactivado.", tostring(sender)))
         end
         return
     end
@@ -2359,7 +2362,7 @@ function Addon:ReceiveSync(message, sender, distribution)
     elseif kind == "END" then
         if receivingConfiguration then
             local completedSyncId = self.receivingSyncId
-            self:Print("Configuración recibida de " .. tostring(sender) .. ".")
+            self:Print(L("Configuración recibida de %s.", tostring(sender)))
             self.receivingSync = nil
             self.receivingSyncVersion = nil
             self.receivingSyncId = nil
@@ -2458,7 +2461,7 @@ function Addon:HandleSlashCommand(input)
     elseif command == "defaults" then
         StaticPopup_Show("BQLMANAGER_CONFIRM_DEFAULTS")
     else
-        self:Print("Comandos: show, start, stop, reset, wave 1-5, announce, sync, validate, defaults.")
+        self:Print(L("Comandos: show, start, stop, reset, wave 1-5, announce, sync, validate, defaults."))
     end
 end
 
@@ -2479,7 +2482,7 @@ function Addon:OnAddonLoaded(addonName)
     end
 
     StaticPopupDialogs.BQLMANAGER_CONFIRM_DEFAULTS = {
-        text = "¿Restaurar toda la configuración inicial de BQL Manager?",
+        text = L("¿Restaurar toda la configuración inicial de BQL Manager?"),
         button1 = YES,
         button2 = NO,
         OnAccept = function()
@@ -2491,7 +2494,7 @@ function Addon:OnAddonLoaded(addonName)
         preferredIndex = 3,
     }
 
-    self:Print("Cargado. Usa /bql para abrir la ventana.")
+    self:Print(L("Cargado. Usa /bql para abrir la ventana."))
 end
 
 Addon.eventFrame = CreateFrame("Frame")

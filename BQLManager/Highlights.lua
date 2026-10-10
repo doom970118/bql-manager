@@ -10,6 +10,9 @@ local ipairs = ipairs
 local pairs = pairs
 local sin = math.sin
 local tostring = tostring
+local L = function(text, ...)
+    return Addon:Text(text, ...)
+end
 
 local UPDATE_INTERVAL = 0.05
 local SCAN_INTERVAL = 0.50
@@ -26,11 +29,11 @@ end
 local STYLE = {
     biter = {
         color = { 0.72, 0.30, 0.95 },
-        label = "TE MUERDE",
+        label = L("TE MUERDE"),
     },
     target = {
         color = { 1.00, 0.22, 0.08 },
-        label = "MUERDE",
+        label = L("MUERDE"),
     },
 }
 
@@ -212,8 +215,8 @@ function Highlights:BuildAssignments()
     end
 
     if self:IsTestActive() then
-        self:AddSlotAssignment(assignments, self.testSourceSlot, "biter", "MORDEDOR")
-        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", "MORDIDO")
+        self:AddSlotAssignment(assignments, self.testSourceSlot, "biter", L("MORDEDOR"))
+        self:AddSlotAssignment(assignments, self.testTargetSlot, "target", L("MORDIDO"))
         return assignments
     end
 
@@ -231,9 +234,9 @@ function Highlights:BuildAssignments()
         local edge = item.edge
         if not Addon.state.completed[item.index] then
             if edge.source == playerSlot then
-                self:AddSlotAssignment(assignments, edge.target, "target", "MUERDE")
+                self:AddSlotAssignment(assignments, edge.target, "target", L("MUERDE"))
             elseif edge.target == playerSlot then
-                self:AddSlotAssignment(assignments, edge.source, "biter", "TE MUERDE")
+                self:AddSlotAssignment(assignments, edge.source, "biter", L("TE MUERDE"))
             end
         end
     end
@@ -242,16 +245,16 @@ end
 
 function Highlights:StartTest(sourceSlot, targetSlot)
     if not Addon:IsSlotActive(sourceSlot) or not Addon:IsSlotActive(targetSlot) then
-        Addon:Print("Selecciona un mordedor y un mordido válidos para la prueba.")
+        Addon:Print(L("Selecciona un mordedor y un mordido válidos para la prueba."))
         return false
     end
     if sourceSlot == targetSlot then
-        Addon:Print("El mordedor y el mordido deben ser jugadores diferentes.")
+        Addon:Print(L("El mordedor y el mordido deben ser jugadores diferentes."))
         return false
     end
     if Addon:IsPlaceholder(sourceSlot, Addon:GetSlotName(sourceSlot))
         or Addon:IsPlaceholder(targetSlot, Addon:GetSlotName(targetSlot)) then
-        Addon:Print("La prueba necesita dos puestos ocupados por jugadores.")
+        Addon:Print(L("La prueba necesita dos puestos ocupados por jugadores."))
         return false
     end
 
@@ -259,7 +262,7 @@ function Highlights:StartTest(sourceSlot, targetSlot)
     self.testTargetSlot = targetSlot
     self.testEndsAt = Now() + TEST_DURATION
     self:RefreshNow()
-    Addon:Print("Prueba visual activa durante " .. tostring(TEST_DURATION) .. " segundos.")
+    Addon:Print(L("Prueba visual activa durante %d segundos.", TEST_DURATION))
     return true
 end
 

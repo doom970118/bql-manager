@@ -34,9 +34,9 @@ def main() -> None:
         "Addon.state.currentWave",
         "Addon.state.completed[item.index]",
         "edge.source == playerSlot",
-        'edge.target, "target", "MUERDE"',
+        'edge.target, "target", L("MUERDE")',
         "edge.target == playerSlot",
-        'edge.source, "biter", "TE MUERDE"',
+        'edge.source, "biter", L("TE MUERDE")',
     ):
         assert snippet in production
 
