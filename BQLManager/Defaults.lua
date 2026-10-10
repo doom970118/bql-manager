@@ -2,7 +2,7 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.12.11"
+Addon.VERSION = "1.13.0"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 
@@ -181,6 +181,8 @@ Addon.DEFAULTS = {
         acceptSync = true,
         autoSync = false,
         locked = false,
+        biteHighlights = true,
+        forceFriendlyNameplates = true,
     },
     window = {
         point = "CENTER",

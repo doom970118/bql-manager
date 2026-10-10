@@ -666,7 +666,11 @@ function UI:SetRosterSlotSelectorValue(selector, slot)
     end
 
     if Addon:IsSlotActive(slot) then
-        selector.label:SetText(Addon:GetSlotLabel(slot))
+        if selector.displayName then
+            selector.label:SetText(Addon:GetSlotName(slot))
+        else
+            selector.label:SetText(Addon:GetSlotLabel(slot))
+        end
         local color = GetSlotRoleColor(slot)
         selector.label:SetTextColor(color[1], color[2], color[3])
         selector:SetBackdropBorderColor(color[1], color[2], color[3], 1)
@@ -677,10 +681,11 @@ function UI:SetRosterSlotSelectorValue(selector, slot)
     end
 end
 
-local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter)
+local function CreateRosterSlotSelector(parent, width, callback, lockedValue, slotFilter, displayName)
     local selector = CreateFrame("Button", NextName("SlotSelector"), parent)
     selector:SetWidth(width or 94)
     selector:SetHeight(20)
+    selector.displayName = displayName and true or false
     SetBackdrop(selector, { 0.03, 0.03, 0.04, 0.98 }, { 0.30, 0.30, 0.36, 1 })
 
     selector.label = CreateText(selector, "GameFontHighlightSmall", "", "LEFT", selector, "LEFT", 6, 0)
@@ -895,6 +900,7 @@ function UI:CreateMainFrame()
         { key = "bites", label = "Mordidas" },
         { key = "cooldowns", label = "Cooldowns" },
         { key = "zones", label = "Zonas" },
+        { key = "options", label = "Opciones" },
     }
 
     local previous
@@ -917,6 +923,7 @@ function UI:CreateMainFrame()
     self:CreateBitesPanel(frame)
     self:CreateCooldownPanel(frame)
     self:CreateZonesPanel(frame)
+    self:CreateOptionsPanel(frame)
     self:ShowTab("summary", true)
     frame:Hide()
 end
@@ -1387,6 +1394,139 @@ function UI:CreateZonesPanel(parent)
     self:RegisterConfigurationPanel(panel)
 end
 
+function UI:IsHighlightTestSlotAvailable(slot)
+    if not Addon:IsSlotActive(slot) then
+        return false
+    end
+    return not Addon:IsPlaceholder(slot, Addon:GetSlotName(slot))
+end
+
+function UI:EnsureHighlightTestSlots()
+    local candidates = {}
+    for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
+        if self:IsHighlightTestSlotAvailable(slot) then
+            tinsert(candidates, slot)
+        end
+    end
+
+    if not self:IsHighlightTestSlotAvailable(self.highlightTestSourceSlot) then
+        self.highlightTestSourceSlot = candidates[1]
+    end
+    if not self:IsHighlightTestSlotAvailable(self.highlightTestTargetSlot)
+        or self.highlightTestTargetSlot == self.highlightTestSourceSlot then
+        self.highlightTestTargetSlot = nil
+        for _, slot in ipairs(candidates) do
+            if slot ~= self.highlightTestSourceSlot then
+                self.highlightTestTargetSlot = slot
+                break
+            end
+        end
+    end
+end
+
+function UI:CreateOptionsPanel(parent)
+    local panel = CreatePanel(parent)
+    self.panels.options = panel
+
+    CreateSectionTitle(panel, "Ayudas personales de mordida", 16, -14)
+    local description = CreateText(
+        panel,
+        "GameFontHighlightSmall",
+        "Resalta localmente la barra y muestra un icono sobre el jugador relacionado contigo en la ronda actual.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -47
+    )
+    description:SetWidth(760)
+    description:SetJustifyH("LEFT")
+
+    self.biteHighlightsCheck = CreateCheck(panel, "Mostrar iconos locales y resaltar barras", function(button)
+        Addon.db.options.biteHighlights = button:GetChecked() and true or false
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:RefreshNow()
+        end
+    end)
+    self.biteHighlightsCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -78)
+
+    self.forceNameplatesCheck = CreateCheck(panel, "Activar placas amistosas durante el encuentro", function(button)
+        Addon.db.options.forceFriendlyNameplates = button:GetChecked() and true or false
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:RefreshNow()
+        end
+    end)
+    self.forceNameplatesCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -108)
+
+    CreateSectionTitle(panel, "Probar las mordidas", 16, -158)
+    local testHelp = CreateText(
+        panel,
+        "GameFontDisableSmall",
+        "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDIDO en rojo durante 15 segundos.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -190
+    )
+    testHelp:SetWidth(760)
+    testHelp:SetJustifyH("LEFT")
+
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 18, -230)
+    self.highlightSourceSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+        UI.highlightTestSourceSlot = slot
+        if UI.highlightTestTargetSlot == slot then
+            UI.highlightTestTargetSlot = nil
+        end
+        UI:RefreshOptions()
+    end, nil, function(slot)
+        return UI:IsHighlightTestSlotAvailable(slot)
+    end, true)
+    self.highlightSourceSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -249)
+
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 270, -230)
+    self.highlightTargetSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+        UI.highlightTestTargetSlot = slot
+        UI:RefreshOptions()
+    end, nil, function(slot)
+        return UI:IsHighlightTestSlotAvailable(slot) and slot ~= UI.highlightTestSourceSlot
+    end, true)
+    self.highlightTargetSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -249)
+
+    self.highlightTestButton = CreateButton(panel, "Probar", 100, 24, function()
+        UI:EnsureHighlightTestSlots()
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:StartTest(UI.highlightTestSourceSlot, UI.highlightTestTargetSlot)
+        end
+        UI:RefreshOptions()
+    end)
+    self.highlightTestButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 520, -247)
+
+    self.highlightStopButton = CreateButton(panel, "Detener prueba", 120, 24, function()
+        if Addon.BiteHighlights then
+            Addon.BiteHighlights:StopTest()
+        end
+    end)
+    self.highlightStopButton:SetPoint("LEFT", self.highlightTestButton, "RIGHT", 6, 0)
+
+    self.highlightTestStatus = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -292)
+    self.highlightTestStatus:SetWidth(760)
+    self.highlightTestStatus:SetJustifyH("LEFT")
+
+    CreateSectionTitle(panel, "Significado visual", 16, -338)
+    local legend = CreateText(
+        panel,
+        "GameFontHighlightSmall",
+        "Rojo: jugador al que debes morder.    Morado: jugador que debe morderte.",
+        "TOPLEFT",
+        panel,
+        "TOPLEFT",
+        18,
+        -370
+    )
+    legend:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+end
+
 function UI:ShowTab(key, skipRefresh)
     self.currentTab = key
     if key == "roster" then
@@ -1608,6 +1748,34 @@ function UI:RefreshZones()
     end
 end
 
+function UI:RefreshOptions()
+    if not self.biteHighlightsCheck then
+        return
+    end
+    self:EnsureHighlightTestSlots()
+    self.biteHighlightsCheck:SetChecked(Addon.db.options.biteHighlights)
+    self.forceNameplatesCheck:SetChecked(Addon.db.options.forceFriendlyNameplates)
+    self:SetRosterSlotSelectorValue(self.highlightSourceSelector, self.highlightTestSourceSlot)
+    self:SetRosterSlotSelectorValue(self.highlightTargetSelector, self.highlightTestTargetSlot)
+
+    local testing = Addon.BiteHighlights and Addon.BiteHighlights:IsTestActive()
+    if testing then
+        self.highlightTestStatus:SetText("Prueba activa: busca los iconos y bordes pulsantes sobre ambos jugadores.")
+        self.highlightTestStatus:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
+        self.highlightStopButton:Enable()
+    else
+        self.highlightTestStatus:SetText("La prueba no cambia la plantilla ni envía marcas a los demás jugadores.")
+        self.highlightTestStatus:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        self.highlightStopButton:Disable()
+    end
+
+    if self.highlightTestSourceSlot and self.highlightTestTargetSlot then
+        self.highlightTestButton:Enable()
+    else
+        self.highlightTestButton:Disable()
+    end
+end
+
 function UI:RefreshConfigurationLock()
     local canEdit = Addon:CanEditConfiguration(true)
     local encounterLocked = Addon:IsConfigurationLocked()
@@ -1725,6 +1893,7 @@ function UI:Refresh()
     self:RefreshBites()
     self:RefreshCooldowns()
     self:RefreshZones()
+    self:RefreshOptions()
     self:RefreshConfigurationLock()
 end
 
