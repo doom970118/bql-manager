@@ -11,7 +11,8 @@ local pairs = pairs
 local sin = math.sin
 local tostring = tostring
 
-local UPDATE_INTERVAL = 0.12
+local UPDATE_INTERVAL = 0.05
+local SCAN_INTERVAL = 0.50
 local TEST_DURATION = 15
 local FRIENDLY_NAMEPLATE_CVAR = "nameplateShowFriends"
 local FALLBACK_BITE_ICON = "Interface\\Icons\\Spell_Shadow_LifeDrain02"
@@ -34,12 +35,15 @@ local STYLE = {
 }
 
 Highlights.elapsed = 0
+Highlights.scanElapsed = SCAN_INTERVAL
 Highlights.overlays = setmetatable({}, { __mode = "k" })
+Highlights.activeOverlays = setmetatable({}, { __mode = "k" })
 Highlights.testSourceSlot = nil
 Highlights.testTargetSlot = nil
 Highlights.testEndsAt = nil
 Highlights.forcedFriendlyNameplates = false
 Highlights.previousFriendlyNameplates = nil
+Highlights.visualActive = false
 
 local function Now()
     return GetTime and GetTime() or 0
@@ -112,6 +116,7 @@ function Highlights:HideAll()
     for _, overlay in pairs(self.overlays) do
         overlay:Hide()
     end
+    self.activeOverlays = setmetatable({}, { __mode = "k" })
 end
 
 function Highlights:GetOverlay(nameplate)
@@ -158,23 +163,15 @@ function Highlights:GetOverlay(nameplate)
     return overlay
 end
 
-function Highlights:ShowOnNameplate(nameplate, assignment, pulse)
+function Highlights:ShowOnNameplate(nameplate, healthBar, assignment, pulse)
     local overlay = self:GetOverlay(nameplate)
-    local healthBar = FindHealthBar(nameplate)
-    local anchor = healthBar or nameplate
     local style = STYLE[assignment.kind] or STYLE.target
     local color = style.color
 
     overlay:ClearAllPoints()
-    if healthBar then
-        overlay:SetPoint("TOPLEFT", anchor, "TOPLEFT", -5, 5)
-        overlay:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 5, -5)
-    else
-        overlay:SetWidth(112)
-        overlay:SetHeight(18)
-        overlay:SetPoint("CENTER", anchor, "CENTER", 0, 0)
-    end
-    overlay:SetFrameLevel((anchor.GetFrameLevel and anchor:GetFrameLevel() or nameplate:GetFrameLevel()) + 12)
+    overlay:SetPoint("TOPLEFT", healthBar, "TOPLEFT", -5, 5)
+    overlay:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 5, -5)
+    overlay:SetFrameLevel((healthBar.GetFrameLevel and healthBar:GetFrameLevel() or nameplate:GetFrameLevel()) + 12)
     overlay:SetBackdropBorderColor(color[1], color[2], color[3], 1)
     overlay.fill:SetTexture(color[1], color[2], color[3], 0.24)
     overlay.iconBorder:SetBackdropBorderColor(color[1], color[2], color[3], 1)
@@ -183,6 +180,13 @@ function Highlights:ShowOnNameplate(nameplate, assignment, pulse)
     overlay.label:SetTextColor(color[1], color[2], color[3])
     overlay:SetAlpha(pulse)
     overlay:Show()
+    self.activeOverlays[overlay] = true
+end
+
+function Highlights:PulseVisible(pulse)
+    for overlay in pairs(self.activeOverlays) do
+        overlay:SetAlpha(pulse)
+    end
 end
 
 function Highlights:AddSlotAssignment(assignments, slot, kind, label)
@@ -271,6 +275,7 @@ end
 
 function Highlights:RefreshNow()
     self.elapsed = UPDATE_INTERVAL
+    self.scanElapsed = SCAN_INTERVAL
     self:Update(0)
 end
 
@@ -279,6 +284,7 @@ function Highlights:Update(elapsed)
     if self.elapsed < UPDATE_INTERVAL then
         return
     end
+    local updateElapsed = self.elapsed
     self.elapsed = 0
 
     if self.testEndsAt and not self:IsTestActive() then
@@ -295,20 +301,39 @@ function Highlights:Update(elapsed)
     local forceNameplates = visualActive and Addon.db and Addon.db.options.forceFriendlyNameplates
     self:SetFriendlyNameplates(forceNameplates and true or false)
 
+    if not visualActive then
+        if self.visualActive then
+            self:HideAll()
+        end
+        self.visualActive = false
+        self.scanElapsed = SCAN_INTERVAL
+        return
+    end
+    self.visualActive = true
+    self.scanElapsed = self.scanElapsed + updateElapsed
+
+    local pulse = 0.72 + (0.28 * ((sin(Now() * 5) + 1) / 2))
+    self:PulseVisible(pulse)
+    if self.scanElapsed < SCAN_INTERVAL then
+        return
+    end
+    self.scanElapsed = 0
+
     local assignments = self:BuildAssignments()
+    self:HideAll()
     if not next(assignments) then
-        self:HideAll()
         return
     end
 
-    self:HideAll()
-    local pulse = 0.72 + (0.28 * ((sin(Now() * 5) + 1) / 2))
     local nameplates = { WorldFrame:GetChildren() }
     for _, nameplate in ipairs(nameplates) do
         if IsVisible(nameplate) then
-            local assignment = FindAssignment(nameplate, assignments)
-            if assignment then
-                self:ShowOnNameplate(nameplate, assignment, pulse)
+            local healthBar = FindHealthBar(nameplate)
+            if healthBar then
+                local assignment = FindAssignment(nameplate, assignments)
+                if assignment then
+                    self:ShowOnNameplate(nameplate, healthBar, assignment, pulse)
+                end
             end
         end
     end

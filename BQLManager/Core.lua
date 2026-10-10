@@ -1902,8 +1902,13 @@ function Addon:ProcessInspectQueue(elapsed)
         return
     end
 
+    if #self.inspectQueue == 0 then
+        self.inspectElapsed = 0
+        return
+    end
+
     self.inspectElapsed = self.inspectElapsed + elapsed
-    if self.inspectElapsed < 2 or #self.inspectQueue == 0 then
+    if self.inspectElapsed < 2 then
         return
     end
     self.inspectElapsed = 0

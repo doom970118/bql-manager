@@ -2,7 +2,7 @@ local Addon = _G.BQLManager or {}
 _G.BQLManager = Addon
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.13.1"
+Addon.VERSION = "1.13.2"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 

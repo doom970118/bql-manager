@@ -54,6 +54,15 @@ def main() -> None:
 
     scanning = HIGHLIGHTS.split("function Highlights:Update", 1)[1]
     assert "WorldFrame:GetChildren()" in scanning
+    assert "local SCAN_INTERVAL = 0.50" in HIGHLIGHTS
+    assert "self.scanElapsed < SCAN_INTERVAL" in scanning
+    assert scanning.index("self:PulseVisible(pulse)") < scanning.index(
+        "WorldFrame:GetChildren()"
+    )
+    assert scanning.index("FindHealthBar(nameplate)") < scanning.index(
+        "FindAssignment(nameplate, assignments)"
+    )
+    assert "self.activeOverlays[overlay] = true" in HIGHLIGHTS
     assert 'region:GetObjectType() == "FontString"' in HIGHLIGHTS
     assert 'child:GetObjectType() == "StatusBar"' in HIGHLIGHTS
     assert 'SetCVar(FRIENDLY_NAMEPLATE_CVAR, "1")' in HIGHLIGHTS
