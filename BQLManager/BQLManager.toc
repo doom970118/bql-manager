@@ -4,7 +4,7 @@
 ## Notes-esES: Organiza plantilla, mordidas, cooldowns y posiciones para Reina de Sangre Lana'thel.
 ## Notes-esMX: Organiza plantilla, mordidas, cooldowns y posiciones para Reina de Sangre Lana'thel.
 ## Author: Latinos del WoW
-## Version: 1.14.6
+## Version: 1.14.7
 ## X-License: MIT
 ## SavedVariables: BQLManagerDB
 

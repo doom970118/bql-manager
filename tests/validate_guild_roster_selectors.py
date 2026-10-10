@@ -63,9 +63,17 @@ def main() -> None:
     assert "function Addon:IsUnitInInspectRange" in CORE
     assert "self.pendingRosterAssignments[key]" in inspection
     assert "self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)" in inspection
+    inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
+        "function Addon:ProcessInspectQueue", 1
+    )[0]
+    assert "self:RefreshUI()" not in inspect_ready
     assert "member.inGroup = false" in inspection
     assert "member.inGroup = hasGroup and true or false" in inspection
     assert "not member.inGroup" in inspection
+    refresh_group = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
+        "function Addon:HandleInspectReady", 1
+    )[0]
+    assert "self:QueueInspectUnit(unit)" not in refresh_group
     assert '"inspect"' in inspection
     assert 'RegisterEvent("INSPECT_READY")' in CORE
     assert 'RegisterEvent("INSPECT_TALENT_READY")' in CORE
@@ -76,6 +84,10 @@ def main() -> None:
     assert "Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0" in CORE
     assert "request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT" in CORE
     assert "No se pudo validar la especialización de %s" in CORE
+    timeout_cleanup = CORE.split("function Addon:ProcessInspectQueue", 1)[1].split(
+        "if self.pendingInspect then", 1
+    )[0]
+    assert "self:RefreshUI()" not in timeout_cleanup
 
     roster_panel = UI.split("function UI:CreateRosterPanel", 1)[1].split(
         "function UI:CreateBitesPanel", 1

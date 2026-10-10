@@ -47,7 +47,7 @@ def main() -> None:
     assert "incomingTrusted or not existingTrusted" in profiles
 
     inspection = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
-        "function Addon:UpdateAssignedPlayerSpec", 1
+        "function Addon:HandleInspectReady", 1
     )[0]
     assert 'local playerName = UnitName("player")' in inspection
     assert "self.verifiedGroupSpecs[playerKey] = specId" in inspection

@@ -1938,8 +1938,6 @@ function Addon:RefreshGroupMemberProfiles()
                         member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
                         self.verifiedGroupSpecs[playerKey] = specId
                     end
-                elseif member and member.inGroup and connected then
-                    self:QueueInspectUnit(unit)
                 end
             end
         end
@@ -1957,26 +1955,6 @@ function Addon:RefreshGroupMemberProfiles()
         end
     end
     self:RefreshUI()
-end
-
-function Addon:UpdateAssignedPlayerSpec(name, specId)
-    if not self:CanModifyConfiguration(true) then
-        return false
-    end
-    local changed = false
-    for _, slot in ipairs(self:GetActiveSlotOrder()) do
-        local record = self.db.roster[slot]
-        if record and self:NormalizeName(record.name) == self:NormalizeName(name) and self:IsSpecAllowedForSlot(slot, specId) then
-            if record.spec ~= specId then
-                record.spec = specId
-                changed = true
-            end
-        end
-    end
-    if changed then
-        self:ScheduleAutoSync()
-    end
-    return changed
 end
 
 function Addon:HandleInspectReady(guid)
@@ -2004,7 +1982,6 @@ function Addon:HandleInspectReady(guid)
     local key = self:NormalizeName(pending.name)
     self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
     self.verifiedGroupSpecs[key] = specId
-    self:UpdateAssignedPlayerSpec(pending.name, specId)
     assignmentRequest = self.pendingRosterAssignments[key]
     self.pendingRosterAssignments[key] = nil
 
@@ -2015,7 +1992,6 @@ function Addon:HandleInspectReady(guid)
     if assignmentRequest then
         self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)
     end
-    self:RefreshUI()
 end
 
 function Addon:ProcessInspectQueue(elapsed)
@@ -2037,10 +2013,6 @@ function Addon:ProcessInspectQueue(elapsed)
             self:Print(L("No se pudo validar la especialización de %s. Acércate, sal de combate y vuelve a intentarlo.", request.name))
         end
     end
-    if #expiredAssignments > 0 then
-        self:RefreshUI()
-    end
-
     if self.pendingInspect then
         self.pendingInspect.elapsed = (self.pendingInspect.elapsed or 0) + elapsed
         if self.pendingInspect.elapsed >= 6 then
