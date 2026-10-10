@@ -5,7 +5,7 @@ local L = function(text, ...)
 end
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.14.5"
+Addon.VERSION = "1.14.6"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 

@@ -68,8 +68,14 @@ def main() -> None:
     assert "not member.inGroup" in inspection
     assert '"inspect"' in inspection
     assert 'RegisterEvent("INSPECT_READY")' in CORE
+    assert 'RegisterEvent("INSPECT_TALENT_READY")' in CORE
+    assert 'event == "INSPECT_TALENT_READY"' in CORE
+    assert "Addon:HandleInspectReady()" in CORE
     assert 'RegisterEvent("GUILD_ROSTER_UPDATE")' in CORE
     assert "Addon:ProcessInspectQueue(elapsed)" in CORE
+    assert "Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0" in CORE
+    assert "request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT" in CORE
+    assert "No se pudo validar la especialización de %s" in CORE
 
     roster_panel = UI.split("function UI:CreateRosterPanel", 1)[1].split(
         "function UI:CreateBitesPanel", 1

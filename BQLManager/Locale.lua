@@ -146,6 +146,7 @@ local ENGLISH = {
     ["Validando la especialización actual de %s antes de asignar %s..."] = "Checking %s's current specialization before assigning %s...",
     ["No se asignó %s a %s: su clase actual (%s) no es compatible."] = "%s was not assigned to %s: their current class (%s) is not compatible.",
     ["No se asignó %s a %s: su especialización actual (%s) no es compatible."] = "%s was not assigned to %s: their current specialization (%s) is not compatible.",
+    ["No se pudo validar la especialización de %s. Acércate, sal de combate y vuelve a intentarlo."] = "%s's specialization could not be verified. Move closer, leave combat, and try again.",
     ["mordidas (fila %d)"] = "bites (row %d)",
     ["cooldowns (%s %d)"] = "cooldowns (%s %d)",
     ["%s admite como máximo %d puestos."] = "%s allows at most %d slots.",

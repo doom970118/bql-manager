@@ -53,6 +53,7 @@ Addon.MAX_ADDON_MESSAGE_BYTES = 230
 Addon.SYNC_DISCOVERY_DELAY = 1.0
 Addon.SYNC_REPORT_TIMEOUT = 10.0
 Addon.SYNC_UI_REFRESH_DELAY = 0.08
+Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0
 Addon.syncSequence = 0
 Addon.syncReport = nil
 Addon.outgoingSyncActive = false
@@ -837,6 +838,7 @@ function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClass
         self.pendingRosterAssignments[key] = {
             slot = slot,
             name = member.name,
+            elapsed = 0,
         }
         self:QueueInspectUnit(unit, true)
         self:Print(L("Validando la especialización actual de %s antes de asignar %s...", member.name, self:GetSlotLabel(slot)))
@@ -1994,18 +1996,17 @@ function Addon:HandleInspectReady(guid)
 
     local _, classKey = UnitClass(pending.unit)
     local specId = classKey and self:DetectTalentSpec(classKey, true) or nil
-    local assignmentRequest
-    local retryUnit
-    if specId then
-        local key = self:NormalizeName(pending.name)
-        self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
-        self.verifiedGroupSpecs[key] = specId
-        self:UpdateAssignedPlayerSpec(pending.name, specId)
-        assignmentRequest = self.pendingRosterAssignments[key]
-        self.pendingRosterAssignments[key] = nil
-    else
-        retryUnit = pending.unit
+    if not specId then
+        return
     end
+
+    local assignmentRequest
+    local key = self:NormalizeName(pending.name)
+    self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
+    self.verifiedGroupSpecs[key] = specId
+    self:UpdateAssignedPlayerSpec(pending.name, specId)
+    assignmentRequest = self.pendingRosterAssignments[key]
+    self.pendingRosterAssignments[key] = nil
 
     self.pendingInspect = nil
     if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
@@ -2013,8 +2014,6 @@ function Addon:HandleInspectReady(guid)
     end
     if assignmentRequest then
         self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)
-    elseif retryUnit then
-        self:QueueInspectUnit(retryUnit)
     end
     self:RefreshUI()
 end
@@ -2022,6 +2021,24 @@ end
 function Addon:ProcessInspectQueue(elapsed)
     if not self.db then
         return
+    end
+
+    local expiredAssignments = {}
+    for key, request in pairs(self.pendingRosterAssignments) do
+        request.elapsed = (request.elapsed or 0) + elapsed
+        if request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT then
+            tinsert(expiredAssignments, key)
+        end
+    end
+    for _, key in ipairs(expiredAssignments) do
+        local request = self.pendingRosterAssignments[key]
+        self.pendingRosterAssignments[key] = nil
+        if request then
+            self:Print(L("No se pudo validar la especialización de %s. Acércate, sal de combate y vuelve a intentarlo.", request.name))
+        end
+    end
+    if #expiredAssignments > 0 then
+        self:RefreshUI()
     end
 
     if self.pendingInspect then
@@ -2749,6 +2766,7 @@ Addon.eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 Addon.eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 Addon.eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
 Addon.eventFrame:RegisterEvent("INSPECT_READY")
+Addon.eventFrame:RegisterEvent("INSPECT_TALENT_READY")
 
 Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -2778,6 +2796,8 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
         Addon:RefreshGroupMemberProfiles()
     elseif event == "INSPECT_READY" then
         Addon:HandleInspectReady(...)
+    elseif event == "INSPECT_TALENT_READY" then
+        Addon:HandleInspectReady()
     end
 end)
 
