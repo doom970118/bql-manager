@@ -17,6 +17,7 @@ local tremove = table.remove
 local tsort = table.sort
 local type = type
 local tostring = tostring
+local MESSAGE_SEPARATOR = "@"
 
 Addon.state = {
     active = false,
@@ -34,7 +35,11 @@ Addon.inspectElapsed = 0
 Addon.pendingInspect = nil
 Addon.autoSyncPending = false
 Addon.autoSyncElapsed = 0
-Addon.AUTO_SYNC_DELAY = 1.0
+Addon.AUTO_SYNC_DELAY = 0.25
+Addon.CHAT_MESSAGE_INTERVAL = 0.22
+Addon.ADDON_MESSAGE_INTERVAL = 0.01
+Addon.SYNC_DISCOVERY_DELAY = 1.0
+Addon.SYNC_REPORT_TIMEOUT = 10.0
 Addon.syncSequence = 0
 Addon.syncReport = nil
 
@@ -1097,12 +1102,14 @@ function Addon:ProcessMessageQueue(elapsed)
     end
 
     self.queueElapsed = self.queueElapsed + elapsed
-    if self.queueElapsed < 0.22 then
+    local item = self.messageQueue[1]
+    local interval = item.kind == "ADDON" and self.ADDON_MESSAGE_INTERVAL or self.CHAT_MESSAGE_INTERVAL
+    if self.queueElapsed < interval then
         return
     end
     self.queueElapsed = 0
 
-    local item = tremove(self.messageQueue, 1)
+    item = tremove(self.messageQueue, 1)
     if item.kind == "CHAT" then
         if SendChatMessage and item.channel then
             SendChatMessage(item.message, item.channel, nil, item.target)
@@ -1872,6 +1879,7 @@ end
 local function EscapeField(value)
     value = tostring(value or "")
     value = string.gsub(value, "%%", "%%25")
+    value = string.gsub(value, "@", "%%40")
     value = string.gsub(value, "|", "%%7C")
     value = string.gsub(value, "\r", "")
     value = string.gsub(value, "\n", "%%0A")
@@ -1882,13 +1890,14 @@ local function UnescapeField(value)
     value = tostring(value or "")
     value = string.gsub(value, "%%0A", "\n")
     value = string.gsub(value, "%%7C", "|")
+    value = string.gsub(value, "%%40", "@")
     value = string.gsub(value, "%%25", "%%")
     return value
 end
 
 local function SplitMessage(message)
     local fields = {}
-    for field in strgmatch(tostring(message or "") .. "|", "(.-)|") do
+    for field in strgmatch(tostring(message or "") .. MESSAGE_SEPARATOR, "(.-)" .. MESSAGE_SEPARATOR) do
         tinsert(fields, UnescapeField(field))
     end
     return fields
@@ -1973,7 +1982,7 @@ function Addon:QueueSync(fields, channel, category)
     for _, field in ipairs(fields) do
         tinsert(encoded, EscapeField(field))
     end
-    self:EnqueueAddon(table.concat(encoded, "|"), channel, nil, category)
+    self:EnqueueAddon(table.concat(encoded, MESSAGE_SEPARATOR), channel, nil, category)
 end
 
 function Addon:CreateSyncId()
@@ -2001,7 +2010,11 @@ function Addon:RegisterSyncResponse(kind, syncId, sender, version, status)
         status = status or "READY",
     }
     if kind == "ACK" then
+        local firstAcknowledgement = not report.acknowledged[key]
         report.acknowledged[key] = true
+        if firstAcknowledgement then
+            self:Print("Configuración aplicada por " .. tostring(sender) .. ".")
+        end
     end
 end
 
@@ -2012,7 +2025,7 @@ function Addon:ProcessSyncReport(elapsed)
     end
 
     report.elapsed = report.elapsed + elapsed
-    if not report.discoveryReported and report.elapsed >= 2 then
+    if not report.discoveryReported and report.elapsed >= self.SYNC_DISCOVERY_DELAY then
         report.discoveryReported = true
         local present = 0
         local locked = 0
@@ -2040,7 +2053,7 @@ function Addon:ProcessSyncReport(elapsed)
         end
     end
 
-    if report.elapsed < 30 then
+    if report.elapsed < self.SYNC_REPORT_TIMEOUT then
         return
     end
 

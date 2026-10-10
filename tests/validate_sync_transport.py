@@ -8,6 +8,14 @@ CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 
 def main() -> None:
     for snippet in (
+        'local MESSAGE_SEPARATOR = "@"',
+        'string.gsub(value, "@", "%%40")',
+        'table.concat(encoded, MESSAGE_SEPARATOR)',
+        "Addon.AUTO_SYNC_DELAY = 0.25",
+        "Addon.ADDON_MESSAGE_INTERVAL = 0.01",
+        "Addon.SYNC_DISCOVERY_DELAY = 1.0",
+        "Addon.SYNC_REPORT_TIMEOUT = 10.0",
+        'item.kind == "ADDON" and self.ADDON_MESSAGE_INTERVAL',
         'local target = item.target or (UnitName and UnitName("player")) or ""',
         "SendAddonMessage(self.MESSAGE_PREFIX, item.message, item.channel, target)",
         "function Addon:CreateSyncId()",
@@ -21,8 +29,11 @@ def main() -> None:
         'self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }',
         "Addon:ReceiveSync(message, sender, channel)",
         "Addon:ProcessSyncReport(elapsed)",
+        'self:Print("Configuración aplicada por " .. tostring(sender) .. ".")',
     ):
         assert snippet in CORE
+
+    assert 'table.concat(encoded, "|")' not in CORE
 
     receive = CORE.split("function Addon:ReceiveSync", 1)[1].split(
         "function Addon:HandleSlashCommand", 1
