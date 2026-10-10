@@ -17,7 +17,8 @@ def main() -> None:
         "if self.outgoingSyncActive then",
         "self.autoSyncElapsed = self.AUTO_SYNC_DELAY",
         "self.outgoingSyncActive = true",
-        'self:QueueSync({ "END", syncId }, channel, category, true)',
+        'tinsert(records, { "END", syncId })',
+        "self:QueuePackedSync(records, syncId, channel, category)",
     ):
         assert snippet in CORE
 

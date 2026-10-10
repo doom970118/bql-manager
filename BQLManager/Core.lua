@@ -9,6 +9,7 @@ local pairs = pairs
 local strfind = string.find
 local strformat = string.format
 local strgmatch = string.gmatch
+local strlen = string.len
 local strlower = string.lower
 local strsub = string.sub
 local strupper = string.upper
@@ -21,6 +22,7 @@ local L = function(text, ...)
     return Addon:Text(text, ...)
 end
 local MESSAGE_SEPARATOR = "@"
+local PACKED_RECORD_SEPARATOR = "|"
 local TRUSTED_SPEC_SOURCES = {
     talents = true,
     inspect = true,
@@ -45,7 +47,8 @@ Addon.autoSyncPending = false
 Addon.autoSyncElapsed = 0
 Addon.AUTO_SYNC_DELAY = 0.25
 Addon.CHAT_MESSAGE_INTERVAL = 0.22
-Addon.ADDON_MESSAGE_INTERVAL = 0.01
+Addon.ADDON_MESSAGE_INTERVAL = 0.03
+Addon.MAX_ADDON_MESSAGE_BYTES = 230
 Addon.SYNC_DISCOVERY_DELAY = 1.0
 Addon.SYNC_REPORT_TIMEOUT = 10.0
 Addon.SYNC_UI_REFRESH_DELAY = 0.08
@@ -55,6 +58,7 @@ Addon.outgoingSyncActive = false
 Addon.pendingManualSync = false
 Addon.syncUIRefreshPending = false
 Addon.syncUIRefreshElapsed = 0
+Addon.receivingPackedSync = nil
 Addon.verifiedGroupSpecs = {}
 
 local function DeepCopy(value)
@@ -2044,6 +2048,22 @@ local function SplitMessage(message)
     return fields
 end
 
+local function EncodeMessage(fields)
+    local encoded = {}
+    for _, field in ipairs(fields) do
+        tinsert(encoded, EscapeField(field))
+    end
+    return table.concat(encoded, MESSAGE_SEPARATOR)
+end
+
+local function SplitPackedRecords(payload)
+    local records = {}
+    for record in strgmatch(tostring(payload or "") .. PACKED_RECORD_SEPARATOR, "(.-)" .. PACKED_RECORD_SEPARATOR) do
+        tinsert(records, record)
+    end
+    return records
+end
+
 function Addon:GetAddonChannel()
     if GetNumRaidMembers and GetNumRaidMembers() > 0 then
         return "RAID"
@@ -2138,11 +2158,42 @@ function Addon:DiscardQueuedConfigurationSync()
 end
 
 function Addon:QueueSync(fields, channel, category, completesConfiguration)
-    local encoded = {}
-    for _, field in ipairs(fields) do
-        tinsert(encoded, EscapeField(field))
+    self:EnqueueAddon(EncodeMessage(fields), channel, nil, category, completesConfiguration)
+end
+
+function Addon:QueuePackedSync(records, syncId, channel, category)
+    local payloads = {}
+    local currentPayload = ""
+
+    for _, fields in ipairs(records) do
+        local encodedRecord = EncodeMessage(fields)
+        local candidate = currentPayload == ""
+            and encodedRecord
+            or (currentPayload .. PACKED_RECORD_SEPARATOR .. encodedRecord)
+        local preview = EncodeMessage({ "PACK", syncId, 999, 999, candidate })
+
+        if currentPayload ~= "" and strlen(preview) > self.MAX_ADDON_MESSAGE_BYTES then
+            tinsert(payloads, currentPayload)
+            currentPayload = encodedRecord
+        else
+            currentPayload = candidate
+        end
     end
-    self:EnqueueAddon(table.concat(encoded, MESSAGE_SEPARATOR), channel, nil, category, completesConfiguration)
+
+    if currentPayload ~= "" then
+        tinsert(payloads, currentPayload)
+    end
+
+    local total = #payloads
+    for index, payload in ipairs(payloads) do
+        self:EnqueueAddon(
+            EncodeMessage({ "PACK", syncId, index, total, payload }),
+            channel,
+            nil,
+            category,
+            index == total
+        )
+    end
 end
 
 function Addon:CreateSyncId()
@@ -2279,26 +2330,29 @@ function Addon:SyncConfiguration(silent)
     end
     local category = "CONFIG"
     self.outgoingSyncActive = true
-    self:QueueSync({ "BEGIN", self.DB_VERSION, syncId }, channel, category)
+    local records = {
+        { "BEGIN", self.DB_VERSION, syncId },
+    }
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
-        self:QueueSync({ "ROSTER", slot, record.name, record.spec, record.role or "" }, channel, category)
+        tinsert(records, { "ROSTER", slot, record.name, record.spec, record.role or "" })
     end
     for index, edge in ipairs(self.db.bites) do
-        self:QueueSync({ "BITE", index, edge.wave, edge.source, edge.target }, channel, category)
+        tinsert(records, { "BITE", index, edge.wave, edge.source, edge.target })
     end
     for _, group in ipairs({ "aura", "flight1", "flight2", "threat" }) do
         for index, record in ipairs(self.db.cooldowns[group]) do
-            self:QueueSync({ "CD", group, index, record.label, record.slot or "", record.source or "", record.target or "" }, channel, category)
+            tinsert(records, { "CD", group, index, record.label, record.slot or "", record.source or "", record.target or "" })
         end
     end
     for key, note in pairs(self.db.zones) do
-        self:QueueSync({ "ZONE", key, note }, channel, category)
+        tinsert(records, { "ZONE", key, note })
     end
     for _, zoneId in ipairs(self.SLOT_ORDER) do
-        self:QueueSync({ "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" }, channel, category)
+        tinsert(records, { "ZPOS", zoneId, self.db.zoneAssignments[zoneId] or "" })
     end
-    self:QueueSync({ "END", syncId }, channel, category, true)
+    tinsert(records, { "END", syncId })
+    self:QueuePackedSync(records, syncId, channel, category)
     if not silent then
         self:Print(L("Sincronización encolada para el grupo."))
     end
@@ -2311,6 +2365,56 @@ function Addon:BroadcastState()
         return
     end
     self:QueueSync({ "STATE", self.state.active and 1 or 0, self.state.currentWave }, channel)
+end
+
+function Addon:ReceivePackedSync(fields, sender, distribution)
+    local syncId = fields[2]
+    local packetIndex = tonumber(fields[3])
+    local packetTotal = tonumber(fields[4])
+    local payload = fields[5] or ""
+    if not syncId or not packetIndex or not packetTotal or packetIndex < 1 or packetTotal < 1 or packetIndex > packetTotal then
+        return
+    end
+
+    local senderKey = self:NormalizeName(sender)
+    if packetIndex == 1 then
+        self.receivingPackedSync = {
+            id = syncId,
+            sender = senderKey,
+            nextIndex = 1,
+            total = packetTotal,
+        }
+    end
+
+    local packed = self.receivingPackedSync
+    if not packed
+        or packed.id ~= syncId
+        or packed.sender ~= senderKey
+        or packed.total ~= packetTotal
+        or packed.nextIndex ~= packetIndex
+    then
+        if packed then
+            self:Print(L("Sincronización incompleta de %s; solicita un nuevo envío.", tostring(sender)))
+            if self.receivingSync and self:NormalizeName(self.receivingSync) == senderKey then
+                self.receivingSync = nil
+                self.receivingSyncVersion = nil
+                self.receivingSyncId = nil
+                self.syncUIRefreshPending = false
+                self.syncUIRefreshElapsed = 0
+            end
+        end
+        self.receivingPackedSync = nil
+        return
+    end
+
+    for _, record in ipairs(SplitPackedRecords(payload)) do
+        self:ReceiveSync(record, sender, distribution)
+    end
+
+    packed.nextIndex = packetIndex + 1
+    if packetIndex == packetTotal then
+        self.receivingPackedSync = nil
+    end
 end
 
 function Addon:ReceiveSync(message, sender, distribution)
@@ -2345,6 +2449,14 @@ function Addon:ReceiveSync(message, sender, distribution)
         return
     end
     if not self.db.options.acceptSync then
+        return
+    end
+    if kind == "PACK" then
+        if self.state.active then
+            self.receivingPackedSync = nil
+            return
+        end
+        self:ReceivePackedSync(fields, sender, distribution)
         return
     end
     local receivingConfiguration = self.receivingSync

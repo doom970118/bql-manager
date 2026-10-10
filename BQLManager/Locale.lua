@@ -187,6 +187,7 @@ local ENGLISH = {
     ["Hay una sincronización en curso. Se enviará el estado más reciente al terminar."] = "Synchronization is in progress. The latest state will be sent when it finishes.",
     ["Sincronización encolada para el grupo."] = "Synchronization queued for the group.",
     ["Sincronización ignorada de %s: Aceptar sincronización está desactivado."] = "Synchronization from %s ignored: Accept synchronization is disabled.",
+    ["Sincronización incompleta de %s; solicita un nuevo envío."] = "Incomplete synchronization from %s; request a new transmission.",
     ["Configuración recibida de %s."] = "Configuration received from %s.",
     ["Comandos: show, start, stop, reset, wave 1-5, announce, sync, validate, defaults."] = "Commands: show, start, stop, reset, wave 1-5, announce, sync, validate, defaults.",
     ["¿Restaurar toda la configuración inicial de BQL Manager?"] = "Restore the entire default BQL Manager configuration?",
