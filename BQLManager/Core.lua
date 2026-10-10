@@ -477,8 +477,13 @@ function Addon:ResetDatabase()
     return true
 end
 
-function Addon:RefreshUI()
-    if self.UI and self.UI.Refresh then
+function Addon:RefreshUI(fromSync)
+    if not self.UI then
+        return
+    end
+    if fromSync and self.UI.RefreshFromSync then
+        self.UI:RefreshFromSync()
+    elseif self.UI.Refresh then
         self.UI:Refresh()
     end
 end
@@ -2195,7 +2200,7 @@ function Addon:ReceiveSync(message, sender, distribution)
             self.receivingSyncId = nil
             self:PrepareZoneAssignments()
             self:RebuildBiteSources()
-            self:RefreshUI()
+            self:RefreshUI(true)
             local channel = distribution or self:GetAddonChannel()
             if channel and completedSyncId and completedSyncId == fields[2] then
                 self:QueueSync({ "ACK", completedSyncId, self.VERSION, "APPLIED" }, channel, "CONTROL")

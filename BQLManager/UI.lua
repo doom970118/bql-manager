@@ -1367,6 +1367,9 @@ function UI:CreateZonesPanel(parent)
         input:SetPoint("TOPLEFT", panel, "TOPLEFT", 540, y - 15)
         local key = definition.key
         input:SetScript("OnEditFocusLost", function(box)
+            if UI.applyingSyncRefresh then
+                return
+            end
             if not Addon:CanModifyConfiguration(true) then
                 UI:Refresh()
                 return
@@ -1659,6 +1662,30 @@ function UI:RefreshConfigurationLock()
             input:EnableKeyboard(not locked)
         end
     end
+end
+
+function UI:RefreshFromSync()
+    if not self.frame then
+        return
+    end
+
+    self.applyingSyncRefresh = true
+    CloseDropDownMenus()
+    if self.guildSuggestionsPopup then
+        self.guildSuggestionsPopup:Hide()
+        self.guildSuggestionsPopup.ownerSelector = nil
+    end
+    self.activeGuildSelector = nil
+    for _, row in pairs(self.rosterRows or {}) do
+        if row.name and row.name.editBox then
+            row.name.editBox:ClearFocus()
+        end
+    end
+    for _, input in pairs(self.zoneInputs or {}) do
+        input:ClearFocus()
+    end
+    self.applyingSyncRefresh = false
+    self:Refresh()
 end
 
 function UI:Refresh()
