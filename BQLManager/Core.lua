@@ -315,11 +315,9 @@ function Addon:IsGuildMemberEligibleForSlot(member, slot)
         return false
     end
 
-    local specId = self:NormalizeSpecId(member.spec)
-    if specId then
-        return self:IsSpecAllowedForSlot(slot, specId)
-    end
-    return self:ClassHasSpecForSlot(member.classKey, slot)
+    local savedSpec = self:GetSpecDefinition(member.spec)
+    local classKey = member.classKey or (savedSpec and savedSpec.classKey)
+    return self:ClassHasSpecForSlot(classKey, slot)
 end
 
 function Addon:GetGuildMemberCandidates(slot, search)
@@ -817,7 +815,7 @@ function Addon:AssignGuildMemberToSlot(slot, name)
     record.name = member.name
     record.spec = specId
     if specId ~= "" then
-        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, inferred and "role" or member.specSource)
+        self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, inferred and "manual" or member.specSource)
     end
 
     if specId == "" then

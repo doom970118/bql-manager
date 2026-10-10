@@ -24,8 +24,9 @@ def main() -> None:
     candidates = CORE.split("function Addon:IsGuildMemberEligibleForSlot", 1)[1].split(
         "function Addon:GetGuildMemberSpecForSlot", 1
     )[0]
-    assert "self:IsSpecAllowedForSlot(slot, specId)" in candidates
-    assert "self:ClassHasSpecForSlot(member.classKey, slot)" in candidates
+    assert "local savedSpec = self:GetSpecDefinition(member.spec)" in candidates
+    assert "member.classKey or (savedSpec and savedSpec.classKey)" in candidates
+    assert "self:ClassHasSpecForSlot(classKey, slot)" in candidates
     assert "not member.inGuild and not member.inGroup" in candidates
     assert "strfind(normalizedName, query, 1, true)" in candidates
 
@@ -36,6 +37,7 @@ def main() -> None:
     assert "otherRecord.name = oldName" in assignment
     assert "record.name = member.name" in assignment
     assert "record.spec = specId" in assignment
+    assert 'inferred and "manual" or member.specSource' in assignment
 
     clear_slot = CORE.split("function Addon:ClearRosterSlot", 1)[1].split(
         "function Addon:AssignGuildMemberToSlot", 1
@@ -94,17 +96,25 @@ def main() -> None:
         "SHAMAN_RESTORATION": {"HEALER"},
     }
 
-    def eligible(known_spec: str | None, role: str) -> bool:
-        if known_spec:
-            return role in roles_by_spec[known_spec]
+    def eligible(_known_spec: str | None, role: str) -> bool:
         return any(role in roles for roles in roles_by_spec.values())
+
+    def spec_for_slot(known_spec: str | None, role: str) -> tuple[str, bool]:
+        if known_spec and role in roles_by_spec[known_spec]:
+            return known_spec, False
+        compatible = [spec_id for spec_id, roles in roles_by_spec.items() if role in roles]
+        return (compatible[0], True) if len(compatible) == 1 else ("", False)
 
     assert eligible(None, "MDPS")
     assert eligible(None, "RDPS")
     assert eligible(None, "HEALER")
     assert not eligible(None, "TANK")
     assert eligible("SHAMAN_RESTORATION", "HEALER")
-    assert not eligible("SHAMAN_RESTORATION", "MDPS")
+    assert eligible("SHAMAN_RESTORATION", "MDPS")
+    assert eligible("SHAMAN_RESTORATION", "RDPS")
+    assert not eligible("SHAMAN_RESTORATION", "TANK")
+    assert spec_for_slot("SHAMAN_RESTORATION", "RDPS") == ("SHAMAN_ELEMENTAL", True)
+    assert spec_for_slot("SHAMAN_RESTORATION", "MDPS") == ("SHAMAN_ENHANCEMENT", True)
 
     print("Persistent searchable guild roster, class icons, role filters, and inspect cache passed.")
 
