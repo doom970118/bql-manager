@@ -19,7 +19,7 @@ Addon independiente para World of Warcraft 3.3.5a que organiza el encuentro de R
 - Importación de la banda actual sin destruir asignaciones válidas.
 - Sincronización manual o automática desde el líder de grupo o el líder/asistentes de banda hacia los demás jugadores.
 - Modo de solo lectura para los miembros normales mientras están en grupo o banda; fuera de grupo pueden preparar sus plantillas.
-- Iconos locales y bordes pulsantes sobre las placas amistosas para identificar al mordedor o al objetivo personal de cada ronda, con una prueba configurable desde el tab `Opciones`.
+- Iconos locales y bordes pulsantes sobre las placas amistosas para identificar al mordedor o al objetivo personal; fuera de la prueba del tab `Opciones`, solo aparecen desde que el mordedor recibe Sed de sangre frenética hasta que realiza la mordida.
 - Interfaz bilingüe: español automático para `esES`/`esMX` e inglés como respaldo para cualquier otro idioma del cliente.
 - Bloqueo de toda la configuración mientras el encuentro está activo, hasta que Lana'thel muera o se pulse `Detener`.
 - Validador de puestos vacíos, jugadores duplicados y conflictos en el árbol.

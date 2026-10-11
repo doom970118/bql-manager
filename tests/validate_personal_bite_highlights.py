@@ -4,16 +4,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_ROOT = ROOT / "BQLManager" if (ROOT / "BQLManager").is_dir() else ROOT
 DEFAULTS = (ADDON_ROOT / "Defaults.lua").read_text(encoding="utf-8")
+CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 HIGHLIGHTS = (ADDON_ROOT / "Highlights.lua").read_text(encoding="utf-8")
 UI = (ADDON_ROOT / "UI.lua").read_text(encoding="utf-8")
 TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
-def assignments(player_slot, wave_edges, completed=None):
+def assignments(player_slot, wave_edges, frenzy_sources=None, completed=None):
+    frenzy_sources = frenzy_sources or set()
     completed = completed or set()
     result = {}
     for index, (source, target) in enumerate(wave_edges, start=1):
         if index in completed:
+            continue
+        if source not in frenzy_sources:
             continue
         if source == player_slot:
             result[target] = "target"
@@ -33,6 +37,7 @@ def main() -> None:
     for snippet in (
         "Addon.state.currentWave",
         "Addon.state.completed[item.index]",
+        "self.frenzySources[edge.source]",
         "edge.source == playerSlot",
         'edge.target, "target", L("MUERDE")',
         "edge.target == playerSlot",
@@ -73,7 +78,19 @@ def main() -> None:
     assert "GetCVar(FRIENDLY_NAMEPLATE_CVAR)" in HIGHLIGHTS
     assert "Addon.db.options.forceFriendlyNameplates" not in HIGHLIGHTS
     assert "forceNameplatesCheck" not in UI
-    assert "solo se activan durante una prueba" in UI
+    assert "solo se activan durante una prueba o cuando el mordedor recibe Sed de sangre frenética" in UI
+
+    activation = HIGHLIGHTS.split("function Highlights:ActivateFrenzySource", 1)[1].split(
+        "function Highlights:DeactivateFrenzySource", 1
+    )[0]
+    assert "Addon:GetWaveEdges(Addon.state.currentWave)" in activation
+    assert "item.edge.source == slot" in activation
+    assert "self.frenzySources[slot] = true" in activation
+    assert "self.BiteHighlights:ActivateFrenzySource(slot)" in CORE
+    assert "self.BiteHighlights:DeactivateFrenzySource(sourceSlot)" in CORE
+    assert CORE.index("self:MarkBite(data.sourceName, data.destName)") < CORE.index(
+        "self.BiteHighlights:DeactivateFrenzySource(sourceSlot)"
+    )
 
     update = HIGHLIGHTS.split("function Highlights:Update", 1)[1]
     assert "local assignments = self:BuildAssignments()" in update
@@ -99,12 +116,14 @@ def main() -> None:
     assert "self:RefreshOptions()" in UI
 
     wave = [("RDPS1", "RDPS2"), ("RDPS3", "RDPS4")]
-    assert assignments("RDPS1", wave) == {"RDPS2": "target"}
-    assert assignments("RDPS2", wave) == {"RDPS1": "biter"}
-    assert assignments("RDPS3", wave, {2}) == {}
-    assert assignments("RDPS9", wave) == {}
+    assert assignments("RDPS1", wave) == {}
+    assert assignments("RDPS2", wave) == {}
+    assert assignments("RDPS1", wave, {"RDPS1"}) == {"RDPS2": "target"}
+    assert assignments("RDPS2", wave, {"RDPS1"}) == {"RDPS1": "biter"}
+    assert assignments("RDPS3", wave, {"RDPS3"}, {2}) == {}
+    assert assignments("RDPS9", wave, {"RDPS1"}) == {}
 
-    print("Personal bite icons, pulsing nameplate bars, and visual test controls passed.")
+    print("Frenzy-timed bite icons, pulsing nameplate bars, and visual test controls passed.")
 
 
 if __name__ == "__main__":

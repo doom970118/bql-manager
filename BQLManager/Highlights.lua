@@ -47,6 +47,9 @@ Highlights.testEndsAt = nil
 Highlights.forcedFriendlyNameplates = false
 Highlights.previousFriendlyNameplates = nil
 Highlights.visualActive = false
+Highlights.frenzySources = {}
+Highlights.observedEncounterActive = false
+Highlights.observedWave = 1
 
 local function Now()
     return GetTime and GetTime() or 0
@@ -208,6 +211,40 @@ function Highlights:AddSlotAssignment(assignments, slot, kind, label)
     }
 end
 
+function Highlights:SyncEncounterState()
+    local active = Addon.state and Addon.state.active == true
+    local wave = Addon.state and tonumber(Addon.state.currentWave) or 1
+    if self.observedEncounterActive ~= active or self.observedWave ~= wave then
+        self.frenzySources = {}
+        self.observedEncounterActive = active
+        self.observedWave = wave
+    end
+end
+
+function Highlights:ActivateFrenzySource(slot)
+    self:SyncEncounterState()
+    if not Addon.state.active or not Addon:IsSlotActive(slot) then
+        return false
+    end
+
+    for _, item in ipairs(Addon:GetWaveEdges(Addon.state.currentWave)) do
+        if not Addon.state.completed[item.index] and item.edge.source == slot then
+            self.frenzySources[slot] = true
+            self:RefreshNow()
+            return true
+        end
+    end
+    return false
+end
+
+function Highlights:DeactivateFrenzySource(slot)
+    if not slot or not self.frenzySources[slot] then
+        return
+    end
+    self.frenzySources[slot] = nil
+    self:RefreshNow()
+end
+
 function Highlights:BuildAssignments()
     local assignments = {}
     if not Addon.db then
@@ -232,7 +269,7 @@ function Highlights:BuildAssignments()
 
     for _, item in ipairs(Addon:GetWaveEdges(Addon.state.currentWave)) do
         local edge = item.edge
-        if not Addon.state.completed[item.index] then
+        if not Addon.state.completed[item.index] and self.frenzySources[edge.source] then
             if edge.source == playerSlot then
                 self:AddSlotAssignment(assignments, edge.target, "target", L("MUERDE"))
             elseif edge.target == playerSlot then
@@ -289,6 +326,7 @@ function Highlights:Update(elapsed)
     end
     local updateElapsed = self.elapsed
     self.elapsed = 0
+    self:SyncEncounterState()
 
     if self.testEndsAt and not self:IsTestActive() then
         self.testSourceSlot = nil
