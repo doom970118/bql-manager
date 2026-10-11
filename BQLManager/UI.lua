@@ -1454,7 +1454,7 @@ function UI:CreateOptionsPanel(parent)
     local description = CreateText(
         panel,
         "GameFontHighlightSmall",
-        "Resalta localmente al jugador relacionado contigo. Las placas amistosas solo se activan durante una prueba o mientras participas en la mordida actual.",
+        "Resalta localmente al jugador relacionado contigo. Las placas amistosas solo se activan durante una prueba o cuando el mordedor recibe Sed de sangre frenética; se restauran después de la mordida.",
         "TOPLEFT",
         panel,
         "TOPLEFT",

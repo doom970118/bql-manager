@@ -1529,6 +1529,9 @@ function Addon:WarnFrenzy(playerName)
     for _, item in ipairs(self:GetWaveEdges(self.state.currentWave)) do
         local edge = item.edge
         if edge.source == slot and not self.state.completed[item.index] then
+            if self.BiteHighlights then
+                self.BiteHighlights:ActivateFrenzySource(slot)
+            end
             local targetName = self:GetSlotName(edge.target)
             if self.db.options.whisperAssignments and self:CanSendAssignmentWhispers() then
                 self:Whisper(playerName, L("¡MUERDE AHORA a %s (%s)!", targetName, edge.target))
@@ -1624,6 +1627,10 @@ function Addon:HandleCombatLog(...)
     if isBiteEvent or isEssenceEvent then
         self:DetectInitialBossBite(data.sourceName, data.destName)
         self:MarkBite(data.sourceName, data.destName)
+        local sourceSlot = self:GetSlotForName(data.sourceName)
+        if sourceSlot and self.BiteHighlights then
+            self.BiteHighlights:DeactivateFrenzySource(sourceSlot)
+        end
     elseif subevent == "SPELL_AURA_APPLIED" and self:IsFrenzySpell(data.spellId, data.spellName) then
         self:WarnFrenzy(data.destName)
     end
