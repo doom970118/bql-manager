@@ -210,6 +210,7 @@ local ENGLISH = {
 
     -- Validation details
     ["La plantilla tiene %d de %d puestos activos."] = "The roster has %d of %d active slots.",
+    ["La plantilla debe conservar exactamente %d tanques."] = "The roster must keep exactly %d tanks.",
     ["La plantilla no puede tener más de dos tanques."] = "The roster cannot have more than two tanks.",
     ["La plantilla debe conservar al menos un healer."] = "The roster must keep at least one healer.",
     ["%s no tiene una clase conocida."] = "%s does not have a known class.",

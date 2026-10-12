@@ -1735,6 +1735,10 @@ function Addon:GetValidationIssues()
         AddIssue(L("La plantilla tiene %d de %d puestos activos.", #activeSlots, self.MAX_ROSTER_SIZE))
     end
     local roleCounts = self:GetRoleCounts()
+    local tankMinimum = self.ROLE_MINIMUMS.TANK or 2
+    if roleCounts.TANK < tankMinimum then
+        AddIssue(L("La plantilla debe conservar exactamente %d tanques.", tankMinimum))
+    end
     if roleCounts.TANK > (self.ROLE_MAXIMUMS.TANK or 2) then
         AddIssue(L("La plantilla no puede tener más de dos tanques."))
     end

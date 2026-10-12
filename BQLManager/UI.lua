@@ -1021,26 +1021,32 @@ function UI:CreateRosterPanel(parent)
     self.roleControls = {}
 
     CreateSectionTitle(panel, "Plantilla", 16, -12)
-    self.rosterTotal = CreateText(panel, "GameFontDisableSmall", "", "TOPLEFT", panel, "TOPLEFT", 103, -18)
+    self.rosterTotal = CreateText(panel, "GameFontDisableSmall", "", "TOPLEFT", panel, "TOPLEFT", 90, -18)
+    self.rosterTotal:SetWidth(36)
+    self.rosterTotal:SetJustifyH("CENTER")
     self.rosterTotal:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
-    local roleX = { TANK = 145, MDPS = 235, RDPS = 325, HEALER = 415 }
+    local roleX = { TANK = 134, MDPS = 204, RDPS = 274, HEALER = 344 }
     for _, role in ipairs(Addon.ROLE_ORDER) do
         local x = roleX[role]
         local currentRole = role
         local control = {}
-        control.label = CreateText(panel, "GameFontNormalSmall", role, "TOPLEFT", panel, "TOPLEFT", x, -17)
+        control.icon = panel:CreateTexture(nil, "ARTWORK")
+        control.icon:SetWidth(18)
+        control.icon:SetHeight(18)
+        control.icon:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 21, -10)
+        SetRoleIcon(control.icon, role)
         control.remove = CreateButton(panel, "-", 18, 18, function()
             Addon:RemoveRosterRole(currentRole)
         end)
-        control.remove:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 48, -11)
-        control.count = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 70, -17)
+        control.remove:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -10)
+        control.count = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", x + 21, -31)
         control.count:SetWidth(18)
         control.count:SetJustifyH("CENTER")
         control.add = CreateButton(panel, "+", 18, 18, function()
             Addon:AddRosterRole(currentRole)
         end)
-        control.add:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 87, -11)
+        control.add:SetPoint("TOPLEFT", panel, "TOPLEFT", x + 42, -10)
         self.roleControls[role] = control
     end
 
@@ -1048,19 +1054,19 @@ function UI:CreateRosterPanel(parent)
         Addon:ImportRaidRoster()
     end)
     self.importButton = import
-    import:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -10)
 
     local verify = CreateButton(panel, "Verificar specs", 108, 22, function()
         Addon:VerifyRosterSpecializations()
     end)
     self.verifySpecsButton = verify
-    verify:SetPoint("RIGHT", import, "LEFT", -5, 0)
 
     local clear = CreateButton(panel, "Limpiar plantilla", 115, 22, function()
         StaticPopup_Show("BQLMANAGER_CONFIRM_CLEAR_ROSTER")
     end)
     self.clearRosterButton = clear
-    clear:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -36)
+    clear:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -10)
+    import:SetPoint("RIGHT", clear, "LEFT", -5, 0)
+    verify:SetPoint("RIGHT", import, "LEFT", -5, 0)
 
     local columns = {
         { x = 16, startIndex = 1, endIndex = 13 },
