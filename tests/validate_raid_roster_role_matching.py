@@ -6,11 +6,13 @@ ADDON_ROOT = ROOT / "BQLManager" if (ROOT / "BQLManager").is_dir() else ROOT
 CORE = (ADDON_ROOT / "Core.lua").read_text(encoding="utf-8")
 
 
-def automatic_match(verified_spec, class_roles, slot_role):
-    if verified_spec is not None:
-        return verified_spec if slot_role in verified_spec[1] else None
-    possible_roles = set().union(*(roles for _, roles in class_roles))
-    return "" if possible_roles == {slot_role} else None
+def automatic_match(saved_spec, class_roles, slot_role):
+    if not any(slot_role in roles for _, roles in class_roles):
+        return None
+    if saved_spec is not None and slot_role in saved_spec[1]:
+        return saved_spec
+    compatible = [spec for spec in class_roles if slot_role in spec[1]]
+    return compatible[0] if len(compatible) == 1 else ""
 
 
 def main() -> None:
@@ -19,10 +21,9 @@ def main() -> None:
     )[1].split("function Addon:GetGroupUnitTokens", 1)[0]
     for snippet in (
         "self:GetGuildMemberProfile(member.name)",
-        "self.verifiedGroupSpecs and self.verifiedGroupSpecs[key]",
-        "self:IsSpecAllowedForSlot(slot, specId)",
-        "local possibleRoles = {}",
-        "roleCount == 1 and possibleRoles[slotRole]",
+        "member.classFile or (profile and profile.classKey)",
+        "self:ClassHasSpecForSlot(classKey, slot)",
+        "self:GetGuildMemberSpecForSlot(candidate, slot)",
     ):
         assert snippet in matcher
 
@@ -35,7 +36,7 @@ def main() -> None:
         "self:GetAutomaticRaidMemberSpecForSlot(candidate, slot)",
         'record.spec = matchedSpec or ""',
         "rellenados por rol",
-        "siguen vacíos hasta conocer una spec compatible",
+        "siguen vacíos por no encontrar una clase compatible",
     ):
         assert snippet in importer
     assert "local nextMember" not in importer
@@ -47,11 +48,10 @@ def main() -> None:
     assert "incomingTrusted or not existingTrusted" in profiles
 
     inspection = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
-        "function Addon:HandleInspectReady", 1
+        "function Addon:FinishRosterSpecVerification", 1
     )[0]
-    assert 'local playerName = UnitName("player")' in inspection
-    assert "self.verifiedGroupSpecs[playerKey] = specId" in inspection
-    assert "not member.inGroup" in inspection
+    assert "self:DetectTalentSpec" not in inspection
+    assert "self:QueueInspectUnit" not in inspection
 
     inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
         "function Addon:ProcessInspectQueue", 1
@@ -72,15 +72,18 @@ def main() -> None:
 
     assert automatic_match(None, mage, "MDPS") is None
     assert automatic_match(None, mage, "RDPS") == ""
-    assert automatic_match(("DRUID_BALANCE", {"RDPS"}), druid, "MDPS") is None
+    assert automatic_match(("DRUID_BALANCE", {"RDPS"}), druid, "MDPS") == (
+        "DRUID_FERAL",
+        {"TANK", "MDPS"},
+    )
     assert automatic_match(("DRUID_BALANCE", {"RDPS"}), druid, "RDPS") == (
         "DRUID_BALANCE",
         {"RDPS"},
     )
-    assert automatic_match(None, druid, "MDPS") is None
-    assert automatic_match(None, druid, "RDPS") is None
+    assert automatic_match(None, druid, "MDPS") == ("DRUID_FERAL", {"TANK", "MDPS"})
+    assert automatic_match(None, druid, "RDPS") == ("DRUID_BALANCE", {"RDPS"})
 
-    print("Raid completion matches confirmed specs and never guesses hybrid roles.")
+    print("Raid completion uses class capabilities without real-time specialization inspection.")
 
 
 if __name__ == "__main__":

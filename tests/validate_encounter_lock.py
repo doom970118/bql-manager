@@ -49,7 +49,9 @@ def main() -> None:
     assert UI.count("self:RegisterConfigurationPanel(panel)") == 4
     assert "overlay:EnableMouse(true)" in UI
     assert "overlay.notice" not in UI
-    assert "not Addon.db.options.locked and not Addon:IsConfigurationLocked()" in UI
+    assert "if not Addon.db.options.locked then" in UI
+    assert "function Addon:ProcessEncounterEnd(elapsed)" in CORE
+    assert 'self:StopEncounter("combat_end", false)' in CORE
     assert "self:RefreshConfigurationLock()" in UI
 
     print("Encounter configuration locking and automatic first-bite exception passed.")

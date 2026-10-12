@@ -40,7 +40,9 @@ def main() -> None:
         )
 
     stop = function_block(CORE, "StopEncounter", "ResetEncounter")
-    assert 'self:CanEditConfiguration(reason == "victory")' in stop
+    assert 'local automatic = reason == "victory" or reason == "combat_end"' in stop
+    assert "self:CanEditConfiguration(automatic)" in stop
+    assert "if not automatic and not canControl then" in stop
     assert 'announce ~= false and canControl' in stop
 
     announce = function_block(CORE, "Announce", "Whisper")
@@ -53,6 +55,9 @@ def main() -> None:
         "local canEdit = Addon:CanEditConfiguration(true)",
         "local locked = encounterLocked or not canEdit",
         "self.announceButton",
+        "self.validateButton",
+        "self.verifySpecsButton",
+        "self.clearRosterButton",
         "if encounterLocked and canEdit then",
     ):
         assert snippet in lock
@@ -69,6 +74,16 @@ def main() -> None:
     assert 'event == "PARTY_MEMBERS_CHANGED"' in CORE
     assert 'event == "PLAYER_ENTERING_WORLD"' in CORE
     assert "Addon:RefreshGroupMemberProfiles()\n        Addon:RefreshUI()" in CORE
+    validation = function_block(CORE, "ValidateAndReport", "GetRaidMembers")
+    assert "self:CanModifyConfiguration()" in validation
+    verification = function_block(
+        CORE, "VerifyRosterSpecializations", "HandleInspectReady"
+    )
+    assert "self:CanModifyConfiguration()" in verification
+    clear_roster = function_block(
+        CORE, "ClearRoster", "CancelPendingSpecVerificationForSlot"
+    )
+    assert "self:CanModifyConfiguration()" in clear_roster
 
     print("Regular group and raid members are read-only while leaders and assistants retain control.")
 

@@ -43,7 +43,13 @@ Addon.inspectQueue = {}
 Addon.inspectQueued = {}
 Addon.inspectElapsed = 0
 Addon.pendingInspect = nil
-Addon.pendingRosterAssignments = {}
+Addon.pendingSpecVerifications = {}
+Addon.rosterVerification = nil
+Addon.lastValidationIssues = nil
+Addon.validationHasRun = false
+Addon.encounterCombatObserved = false
+Addon.encounterEndElapsed = 0
+Addon.encounterCombatCheckElapsed = 0
 Addon.autoSyncPending = false
 Addon.autoSyncElapsed = 0
 Addon.AUTO_SYNC_DELAY = 0.25
@@ -54,6 +60,7 @@ Addon.SYNC_DISCOVERY_DELAY = 1.0
 Addon.SYNC_REPORT_TIMEOUT = 10.0
 Addon.SYNC_UI_REFRESH_DELAY = 0.08
 Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0
+Addon.INSPECT_VERIFICATION_QUEUE_TIMEOUT = 60.0
 Addon.syncSequence = 0
 Addon.syncReport = nil
 Addon.outgoingSyncActive = false
@@ -485,6 +492,7 @@ function Addon:InitializeDatabase()
 
     self.db = _G.BQLManagerDB
     self:PrepareRoster()
+    self:NormalizeCooldownAssignments()
     self.db.version = self.DB_VERSION
 end
 
@@ -495,6 +503,8 @@ function Addon:ResetDatabase()
     _G.BQLManagerDB = DeepCopy(self.DEFAULTS)
     self.db = _G.BQLManagerDB
     self:PrepareRoster()
+    self.lastValidationIssues = nil
+    self.validationHasRun = false
     self:ResetEncounter(false)
     self:RefreshUI()
     self:Print(L("Configuración inicial restaurada."))
@@ -687,6 +697,23 @@ function Addon:IsCooldownSlotAssignedInOtherFlight(group, index, slot)
     return otherRecord and self:Trim(otherRecord.slot) == slot or false
 end
 
+function Addon:GetCooldownRequiredClass(kind)
+    if kind == "AURA_MASTERY" or kind == "DSAC" then
+        return "PALADIN"
+    elseif kind == "MANA_TIDE" then
+        return "SHAMAN"
+    elseif kind == "HYMN" then
+        return "PRIEST"
+    elseif kind == "TRANQUILITY" then
+        return "DRUID"
+    elseif kind == "MISDIRECTION" then
+        return "HUNTER"
+    elseif kind == "TRICKS" then
+        return "ROGUE"
+    end
+    return nil
+end
+
 function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromotion)
     index = tonumber(index)
     local records = self.db and self.db.cooldowns and self.db.cooldowns[group]
@@ -706,6 +733,10 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
         return true
     end
     if not self:IsSlotActive(slot) then
+        return false
+    end
+    local slotRecord = self:GetSlotRecord(slot)
+    if not slotRecord or self:IsPlaceholder(slot, slotRecord.name) then
         return false
     end
     if field == "slot" and (group == "flight1" or group == "flight2") then
@@ -728,10 +759,19 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
         return allowDpsPromotion == true and (role == "MDPS" or role == "RDPS")
     end
 
-    local slotRecord = self:GetSlotRecord(slot)
-    local spec = slotRecord and self:GetSpecDefinition(slotRecord.spec)
-    if not spec then
+    local requiredClass = self:GetCooldownRequiredClass(kind)
+    local classKey = self:GetRosterClassKey(slot)
+    if not requiredClass or classKey ~= requiredClass then
         return false
+    end
+
+    local verifiedSpecId = slotRecord
+        and self.verifiedGroupSpecs[self:NormalizeName(slotRecord.name)]
+        or nil
+    local spec = self:GetSpecDefinition(verifiedSpecId)
+        or (slotRecord and self:GetSpecDefinition(slotRecord.spec))
+    if not spec then
+        return true
     end
 
     if kind == "AURA_MASTERY" then
@@ -750,6 +790,35 @@ function Addon:IsCooldownSlotEligible(group, index, field, slot, allowDpsPromoti
         return spec.classKey == "ROGUE"
     end
     return false
+end
+
+function Addon:NormalizeCooldownAssignments()
+    if not self.db or not self.db.cooldowns then
+        return false
+    end
+
+    local changed = false
+    for group, records in pairs(self.db.cooldowns) do
+        for index, record in ipairs(records) do
+            if group == "threat" then
+                if record.source and record.source ~= ""
+                    and not self:IsCooldownSlotEligible(group, index, "source", record.source, false) then
+                    record.source = ""
+                    changed = true
+                end
+                if record.target and record.target ~= ""
+                    and not self:IsCooldownSlotEligible(group, index, "target", record.target, false) then
+                    record.target = ""
+                    changed = true
+                end
+            elseif record.slot and record.slot ~= ""
+                and not self:IsCooldownSlotEligible(group, index, "slot", record.slot, false) then
+                record.slot = ""
+                changed = true
+            end
+        end
+    end
+    return changed
 end
 
 function Addon:SetCooldownAssignment(group, index, field, slot)
@@ -801,6 +870,7 @@ function Addon:SetRosterValue(slot, field, value)
 
     self.db.roster[slot][field] = self:Trim(value)
     self:RememberRosterPlayer(slot, "manual")
+    self:NormalizeCooldownAssignments()
     self:ScheduleAutoSync()
     self:RefreshUI()
 end
@@ -813,24 +883,58 @@ function Addon:ClearRosterSlot(slot)
         return false
     end
 
-    self:CancelPendingRosterAssignmentForSlot(slot)
+    self:CancelPendingSpecVerificationForSlot(slot)
     local record = self.db.roster[slot]
     record.name = ""
     record.spec = ""
+    self:NormalizeCooldownAssignments()
     self:ScheduleAutoSync()
     self:RefreshUI()
     return true
 end
 
-function Addon:CancelPendingRosterAssignmentForSlot(slot)
-    for key, request in pairs(self.pendingRosterAssignments or {}) do
+function Addon:ClearRoster()
+    if not self:CanModifyConfiguration() then
+        return false
+    end
+
+    self.pendingSpecVerifications = {}
+    self.rosterVerification = nil
+    self.inspectQueue = {}
+    self.inspectQueued = {}
+    self.pendingInspect = nil
+    if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
+        ClearInspectPlayer()
+    end
+
+    for _, slot in ipairs(self.SLOT_ORDER) do
+        local record = self.db.roster[slot]
+        record.name = ""
+        record.spec = ""
+    end
+    self:NormalizeCooldownAssignments()
+    self:ScheduleAutoSync()
+    self:RefreshUI()
+    self:Print(L("Plantilla limpiada. Se conservaron los puestos, las mordidas y las zonas."))
+    return true
+end
+
+function Addon:CancelPendingSpecVerificationForSlot(slot)
+    local canceled = 0
+    for key, request in pairs(self.pendingSpecVerifications or {}) do
         if request.slot == slot then
-            self.pendingRosterAssignments[key] = nil
+            self.pendingSpecVerifications[key] = nil
+            canceled = canceled + 1
         end
+    end
+    if canceled > 0 and self.rosterVerification then
+        self.rosterVerification.pending = math.max(0, self.rosterVerification.pending - canceled)
+        self.rosterVerification.unavailable = self.rosterVerification.unavailable + canceled
+        self:FinishRosterSpecVerification()
     end
 end
 
-function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClassKey)
+function Addon:AssignGuildMemberToSlot(slot, name)
     if not self:CanModifyConfiguration() then
         return false
     end
@@ -838,11 +942,11 @@ function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClass
         return false
     end
 
-    self:CancelPendingRosterAssignmentForSlot(slot)
+    self:CancelPendingSpecVerificationForSlot(slot)
     local member = self:GetGuildMemberProfile(name)
     local unit = member and self:GetGroupUnitForName(member.name) or nil
-    local actualClassKey = verifiedClassKey
-    if not actualClassKey and unit and UnitClass then
+    local actualClassKey
+    if unit and UnitClass then
         local _
         _, actualClassKey = UnitClass(unit)
     end
@@ -864,30 +968,6 @@ function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClass
         return false
     end
 
-    local key = self:NormalizeName(member.name)
-    local normalizedVerifiedSpec = self:NormalizeSpecId(verifiedSpecId)
-    if not normalizedVerifiedSpec and unit and UnitIsUnit and UnitIsUnit(unit, "player") then
-        normalizedVerifiedSpec = self:DetectTalentSpec(actualClassKey, false)
-        if normalizedVerifiedSpec then
-            self.verifiedGroupSpecs[key] = normalizedVerifiedSpec
-        end
-    elseif verifiedSpecId == nil and unit and self:IsUnitInInspectRange(unit) then
-        self.pendingRosterAssignments[key] = {
-            slot = slot,
-            name = member.name,
-            elapsed = 0,
-        }
-        self:QueueInspectUnit(unit, true)
-        self:Print(L("Validando la especialización actual de %s antes de asignar %s...", member.name, self:GetSlotLabel(slot)))
-        return true
-    end
-
-    if normalizedVerifiedSpec and not self:IsSpecAllowedForSlot(slot, normalizedVerifiedSpec) then
-        local spec = self:GetSpecDefinition(normalizedVerifiedSpec)
-        self:Print(L("No se asignó %s a %s: su especialización actual (%s) no es compatible.", member.name, self:GetSlotLabel(slot), spec and spec.name or normalizedVerifiedSpec))
-        return false
-    end
-
     local record = self.db.roster[slot]
     local oldName = record.name
     local oldSpec = record.spec
@@ -904,24 +984,18 @@ function Addon:AssignGuildMemberToSlot(slot, name, verifiedSpecId, verifiedClass
         end
     end
 
-    local specId
-    local inferred = false
-    if normalizedVerifiedSpec then
-        specId = normalizedVerifiedSpec
-    else
-        specId, inferred = self:GetGuildMemberSpecForSlot(member, slot)
-    end
+    local specId, inferred = self:GetGuildMemberSpecForSlot(member, slot)
     record.name = member.name
     record.spec = specId
     if specId ~= "" then
-        local specSource = normalizedVerifiedSpec and ((unit and UnitIsUnit and UnitIsUnit(unit, "player")) and "talents" or "inspect")
-            or (inferred and "manual" or member.specSource)
+        local specSource = inferred and "manual" or member.specSource
         self:RememberPlayerProfile(member.name, member.classKey, specId, member.online, member.inGuild, specSource)
     end
 
     if specId == "" then
         self:Print(L("%s no tiene una spec conocida todavía. Selecciona una spec compatible; quedará guardada para el futuro.", member.name))
     end
+    self:NormalizeCooldownAssignments()
     self:ScheduleAutoSync()
     self:RefreshUI()
     return true
@@ -942,6 +1016,7 @@ function Addon:SetRosterSpec(slot, specId)
 
     self.db.roster[slot].spec = normalized
     self:RememberRosterPlayer(slot, "manual")
+    self:NormalizeCooldownAssignments()
     self:ScheduleAutoSync()
     self:RefreshUI()
     return true
@@ -1185,13 +1260,16 @@ end
 function Addon:FormatCooldownGroup(group)
     local parts = {}
     local records = self.db.cooldowns[group] or {}
-    for _, record in ipairs(records) do
+    for index, record in ipairs(records) do
         if group == "threat" then
-            local sourceName = record.source and record.source ~= "" and self:GetSlotName(record.source) or L("Sin asignar")
-            local targetName = record.target and record.target ~= "" and self:GetSlotName(record.target) or L("Sin asignar")
+            local sourceValid = self:IsCooldownSlotEligible(group, index, "source", record.source, false)
+            local targetValid = self:IsCooldownSlotEligible(group, index, "target", record.target, false)
+            local sourceName = sourceValid and record.source ~= "" and self:GetSlotName(record.source) or L("Sin asignar")
+            local targetName = targetValid and record.target ~= "" and self:GetSlotName(record.target) or L("Sin asignar")
             tinsert(parts, L(record.label) .. " " .. sourceName .. " > " .. targetName)
         else
-            local slotName = record.slot and record.slot ~= "" and self:GetSlotName(record.slot) or L("Sin asignar")
+            local slotValid = self:IsCooldownSlotEligible(group, index, "slot", record.slot, false)
+            local slotName = slotValid and record.slot ~= "" and self:GetSlotName(record.slot) or L("Sin asignar")
             tinsert(parts, L(record.label) .. ": " .. slotName)
         end
     end
@@ -1352,6 +1430,9 @@ function Addon:StartEncounter(announce)
     self.state.completed = {}
     self.state.startedAt = GetTime and GetTime() or 0
     self.state.initialBiteDetected = false
+    self.encounterCombatObserved = UnitAffectingCombat and UnitAffectingCombat("player") and true or false
+    self.encounterEndElapsed = 0
+    self.encounterCombatCheckElapsed = 0
     if announce ~= false then
         self:Announce(L("Seguimiento iniciado."))
         self:AnnounceWave(1, false)
@@ -1362,14 +1443,18 @@ function Addon:StartEncounter(announce)
 end
 
 function Addon:StopEncounter(reason, announce)
-    local canControl = self:CanEditConfiguration(reason == "victory")
-    if reason ~= "victory" and not canControl then
+    local automatic = reason == "victory" or reason == "combat_end"
+    local canControl = self:CanEditConfiguration(automatic)
+    if not automatic and not canControl then
         return false
     end
     if not self.state.active then
         return false
     end
     self.state.active = false
+    self.encounterCombatObserved = false
+    self.encounterEndElapsed = 0
+    self.encounterCombatCheckElapsed = 0
     if announce ~= false and canControl then
         if reason == "victory" then
             self:Announce(L("Encuentro completado."))
@@ -1391,6 +1476,9 @@ function Addon:ResetEncounter(announce)
     self.state.completed = {}
     self.state.startedAt = nil
     self.state.initialBiteDetected = false
+    self.encounterCombatObserved = false
+    self.encounterEndElapsed = 0
+    self.encounterCombatCheckElapsed = 0
     if announce then
         self:Announce(L("Progreso de mordidas reiniciado."))
     end
@@ -1658,14 +1746,15 @@ function Addon:GetValidationIssues()
     for _, slot in ipairs(activeSlots) do
         local record = self.db.roster[slot]
         local name = record and self:Trim(record.name) or ""
-        if not record or not self:GetSpecDefinition(record.spec) then
-            AddIssue(L("%s no tiene una especialización válida seleccionada.", self:GetSlotLabel(slot)))
-        elseif not self:IsSpecAllowedForSlot(slot, record.spec) then
-            AddIssue(L("%s tiene una especialización incompatible con su función.", self:GetSlotLabel(slot)))
-        end
         if self:IsPlaceholder(slot, name) then
             AddIssue(L("%s no tiene un personaje asignado.", self:GetSlotLabel(slot)))
         else
+            local classKey = self:GetRosterClassKey(slot)
+            if not classKey then
+                AddIssue(L("%s no tiene una clase conocida.", self:GetSlotLabel(slot)))
+            elseif not self:ClassHasSpecForSlot(classKey, slot) then
+                AddIssue(L("%s tiene una clase incompatible con su función.", self:GetSlotLabel(slot)))
+            end
             local normalized = self:NormalizeName(name)
             if names[normalized] then
                 AddIssue(L("%s está asignado a %s y %s.", name, names[normalized], self:GetSlotLabel(slot)))
@@ -1790,7 +1879,12 @@ function Addon:GetValidationIssues()
 end
 
 function Addon:ValidateAndReport()
+    if not self:CanModifyConfiguration() then
+        return false
+    end
     local issues = self:GetValidationIssues()
+    self.lastValidationIssues = issues
+    self.validationHasRun = true
     if #issues == 0 then
         self:Print(L("Validación correcta: no se detectaron conflictos."))
         return true
@@ -1830,33 +1924,17 @@ function Addon:GetAutomaticRaidMemberSpecForSlot(member, slot)
     end
 
     local profile = self:GetGuildMemberProfile(member.name)
-    local classKey = strupper(self:Trim((profile and profile.classKey) or member.classFile))
-    local key = self:NormalizeName(member.name)
-    local specId = self:NormalizeSpecId(self.verifiedGroupSpecs and self.verifiedGroupSpecs[key])
-    if specId then
-        if self:IsSpecAllowedForSlot(slot, specId) then
-            return specId, true
-        end
+    local classKey = strupper(self:Trim(member.classFile or (profile and profile.classKey)))
+    if not self:ClassHasSpecForSlot(classKey, slot) then
         return nil, false
     end
 
-    local class = self.CLASSES[classKey]
-    local possibleRoles = {}
-    local roleCount = 0
-    for _, spec in ipairs(class and class.specs or {}) do
-        for role in pairs(spec.roles) do
-            if not possibleRoles[role] then
-                possibleRoles[role] = true
-                roleCount = roleCount + 1
-            end
-        end
-    end
-
-    local slotRole = self:GetSlotRole(slot)
-    if roleCount == 1 and possibleRoles[slotRole] then
-        return "", true
-    end
-    return nil, false
+    local candidate = {
+        classKey = classKey,
+        spec = profile and profile.classKey == classKey and profile.spec or "",
+    }
+    local specId = self:GetGuildMemberSpecForSlot(candidate, slot)
+    return specId, true
 end
 
 function Addon:GetGroupUnitTokens()
@@ -1976,8 +2054,6 @@ function Addon:RefreshGroupMemberProfiles()
     local raidCount = GetNumRaidMembers and GetNumRaidMembers() or 0
     local partyCount = GetNumPartyMembers and GetNumPartyMembers() or 0
     local hasGroup = raidCount > 0 or partyCount > 0
-    local playerName = UnitName("player")
-    local playerKey = self:NormalizeName(playerName)
     for _, unit in ipairs(self:GetGroupUnitTokens()) do
         if not UnitExists or UnitExists(unit) then
             local name = UnitName(unit)
@@ -1986,13 +2062,6 @@ function Addon:RefreshGroupMemberProfiles()
                 local connected = not UnitIsConnected or UnitIsConnected(unit)
                 local member = self:RememberPlayerProfile(name, classKey, nil, connected, nil)
                 member.inGroup = hasGroup and true or false
-                if self:NormalizeName(name) == playerKey then
-                    local specId = self:DetectTalentSpec(classKey, false)
-                    if specId then
-                        member = self:RememberPlayerProfile(name, classKey, specId, connected, nil, "talents")
-                        self.verifiedGroupSpecs[playerKey] = specId
-                    end
-                end
             end
         end
     end
@@ -2002,13 +2071,169 @@ function Addon:RefreshGroupMemberProfiles()
             self.verifiedGroupSpecs[key] = nil
         end
     end
-    for key in pairs(self.pendingRosterAssignments) do
-        local member = self.db.guildMembers[key]
-        if not member or not member.inGroup then
-            self.pendingRosterAssignments[key] = nil
+    self:RefreshUI()
+end
+
+function Addon:FinishRosterSpecVerification()
+    local verification = self.rosterVerification
+    if not verification or verification.building or verification.pending > 0 then
+        return
+    end
+
+    local cooldownsChanged = self:NormalizeCooldownAssignments()
+    if verification.changed or cooldownsChanged then
+        self:ScheduleAutoSync()
+    end
+    self:Print(L(
+        "Verificación de specs terminada: %d compatible(s), %d incompatible(s) y %d sin verificar.",
+        verification.compatible,
+        verification.incompatible,
+        verification.unavailable
+    ))
+    self.rosterVerification = nil
+    self:RefreshUI()
+end
+
+function Addon:FindEmptyCompatibleRosterSlot(specId, excludedSlot)
+    for _, candidateSlot in ipairs(self:GetActiveSlotOrder()) do
+        if candidateSlot ~= excludedSlot and self:IsSpecAllowedForSlot(candidateSlot, specId) then
+            local candidate = self:GetSlotRecord(candidateSlot)
+            if candidate and self:IsPlaceholder(candidateSlot, candidate.name) then
+                return candidateSlot
+            end
         end
     end
+    return nil
+end
+
+function Addon:ApplyRosterSpecVerification(slot, name, classKey, specId, wasPending)
+    local verification = self.rosterVerification
+    if not verification then
+        return
+    end
+    if wasPending then
+        verification.pending = math.max(0, verification.pending - 1)
+    end
+
+    local record = self:GetSlotRecord(slot)
+    if not record or self:NormalizeName(record.name) ~= self:NormalizeName(name) then
+        verification.unavailable = verification.unavailable + 1
+        self:FinishRosterSpecVerification()
+        return
+    end
+
+    local normalizedSpec = self:NormalizeSpecId(specId)
+    if not normalizedSpec then
+        verification.unavailable = verification.unavailable + 1
+    else
+        local key = self:NormalizeName(name)
+        self:RememberPlayerProfile(name, classKey, normalizedSpec, true, nil, "inspect")
+        self.verifiedGroupSpecs[key] = normalizedSpec
+        if self:IsSpecAllowedForSlot(slot, normalizedSpec) then
+            if record.spec ~= normalizedSpec then
+                record.spec = normalizedSpec
+                verification.changed = true
+            end
+            verification.compatible = verification.compatible + 1
+        else
+            local sourceLabel = self:GetSlotLabel(slot)
+            local destinationSlot = self:FindEmptyCompatibleRosterSlot(normalizedSpec, slot)
+            record.name = ""
+            record.spec = ""
+            verification.incompatible = verification.incompatible + 1
+            verification.changed = true
+
+            if destinationSlot then
+                local destination = self:GetSlotRecord(destinationSlot)
+                destination.name = name
+                destination.spec = normalizedSpec
+                self:RememberRosterPlayer(destinationSlot, "inspect")
+                self:Print(L(
+                    "%s tenía una spec incompatible con %s y fue movido automáticamente a %s.",
+                    name,
+                    sourceLabel,
+                    self:GetSlotLabel(destinationSlot)
+                ))
+            else
+                self:Print(L(
+                    "%s tenía una spec incompatible con %s y fue retirado porque no hay un puesto vacío compatible.",
+                    name,
+                    sourceLabel
+                ))
+            end
+        end
+    end
+    self:FinishRosterSpecVerification()
+end
+
+function Addon:VerifyRosterSpecializations()
+    if not self:CanModifyConfiguration() then
+        return false
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        self:Print(L("No se pueden inspeccionar specs durante el combate."))
+        return false
+    end
+
+    self.inspectQueue = {}
+    self.inspectQueued = {}
+    self.pendingInspect = nil
+    self.pendingSpecVerifications = {}
+    self.rosterVerification = {
+        building = true,
+        pending = 0,
+        compatible = 0,
+        incompatible = 0,
+        unavailable = 0,
+        changed = false,
+    }
+
+    self:RefreshGroupMemberProfiles()
+    local rosterSnapshot = {}
+    for _, slot in ipairs(self:GetActiveSlotOrder()) do
+        local record = self:GetSlotRecord(slot)
+        if record and not self:IsPlaceholder(slot, record.name) then
+            table.insert(rosterSnapshot, { slot = slot, name = record.name })
+        end
+    end
+
+    for _, assignment in ipairs(rosterSnapshot) do
+        local slot = assignment.slot
+        local name = assignment.name
+        local unit = self:GetGroupUnitForName(name)
+        if not unit then
+            self.rosterVerification.unavailable = self.rosterVerification.unavailable + 1
+        else
+            local _, classKey = UnitClass(unit)
+            local connected = not UnitIsConnected or UnitIsConnected(unit)
+            local member = self:RememberPlayerProfile(name, classKey, nil, connected, nil)
+            if member then
+                member.inGroup = true
+            end
+            if UnitIsUnit and UnitIsUnit(unit, "player") then
+                local specId = self:DetectTalentSpec(classKey, false)
+                self:ApplyRosterSpecVerification(slot, name, classKey, specId, false)
+            elseif self:IsUnitInInspectRange(unit) then
+                local key = self:NormalizeName(name)
+                self.pendingSpecVerifications[key] = {
+                    slot = slot,
+                    name = name,
+                    elapsed = 0,
+                    waitElapsed = 0,
+                }
+                self.rosterVerification.pending = self.rosterVerification.pending + 1
+                self:QueueInspectUnit(unit, true)
+            else
+                self.rosterVerification.unavailable = self.rosterVerification.unavailable + 1
+            end
+        end
+    end
+
+    self.rosterVerification.building = false
+    self:Print(L("Verificación manual iniciada para los jugadores cercanos de la plantilla."))
+    self:FinishRosterSpecVerification()
     self:RefreshUI()
+    return true
 end
 
 function Addon:HandleInspectReady(guid)
@@ -2018,7 +2243,7 @@ function Addon:HandleInspectReady(guid)
     end
     if UnitGUID and pending.guid and UnitGUID(pending.unit) ~= pending.guid then
         local replacementUnit = self:GetGroupUnitForName(pending.name)
-        local prioritize = self.pendingRosterAssignments[pending.key] ~= nil
+        local prioritize = self.pendingSpecVerifications[pending.key] ~= nil
         self.pendingInspect = nil
         if replacementUnit then
             self:QueueInspectUnit(replacementUnit, prioritize)
@@ -2032,19 +2257,24 @@ function Addon:HandleInspectReady(guid)
         return
     end
 
-    local assignmentRequest
     local key = self:NormalizeName(pending.name)
     self:RememberPlayerProfile(pending.name, classKey, specId, true, nil, "inspect")
     self.verifiedGroupSpecs[key] = specId
-    assignmentRequest = self.pendingRosterAssignments[key]
-    self.pendingRosterAssignments[key] = nil
+    local verificationRequest = self.pendingSpecVerifications[key]
+    self.pendingSpecVerifications[key] = nil
 
     self.pendingInspect = nil
     if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
         ClearInspectPlayer()
     end
-    if assignmentRequest then
-        self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)
+    if verificationRequest then
+        self:ApplyRosterSpecVerification(
+            verificationRequest.slot,
+            verificationRequest.name,
+            classKey,
+            specId,
+            true
+        )
     end
 end
 
@@ -2054,18 +2284,36 @@ function Addon:ProcessInspectQueue(elapsed)
     end
 
     local expiredAssignments = {}
-    for key, request in pairs(self.pendingRosterAssignments) do
-        request.elapsed = (request.elapsed or 0) + elapsed
-        if request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT then
+    for key, request in pairs(self.pendingSpecVerifications) do
+        if self.pendingInspect and self.pendingInspect.key == key then
+            request.elapsed = (request.elapsed or 0) + elapsed
+        else
+            request.waitElapsed = (request.waitElapsed or 0) + elapsed
+        end
+        if request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT
+            or request.waitElapsed >= self.INSPECT_VERIFICATION_QUEUE_TIMEOUT then
             tinsert(expiredAssignments, key)
         end
     end
     for _, key in ipairs(expiredAssignments) do
-        local request = self.pendingRosterAssignments[key]
-        self.pendingRosterAssignments[key] = nil
+        local request = self.pendingSpecVerifications[key]
+        self.pendingSpecVerifications[key] = nil
         if request then
+            if self.pendingInspect and self.pendingInspect.key == key then
+                self.pendingInspect = nil
+                if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
+                    ClearInspectPlayer()
+                end
+            end
             self:Print(L("No se pudo validar la especialización de %s. Acércate, sal de combate y vuelve a intentarlo.", request.name))
+            if self.rosterVerification then
+                self.rosterVerification.pending = math.max(0, self.rosterVerification.pending - 1)
+                self.rosterVerification.unavailable = self.rosterVerification.unavailable + 1
+            end
         end
+    end
+    if #expiredAssignments > 0 then
+        self:FinishRosterSpecVerification()
     end
     if self.pendingInspect then
         self.pendingInspect.elapsed = (self.pendingInspect.elapsed or 0) + elapsed
@@ -2076,7 +2324,9 @@ function Addon:ProcessInspectQueue(elapsed)
             if ClearInspectPlayer and (not InspectFrame or not InspectFrame:IsShown()) then
                 ClearInspectPlayer()
             end
-            self:QueueInspectUnit(unit, self.pendingRosterAssignments[key] ~= nil)
+            if self.pendingSpecVerifications[key] then
+                self:QueueInspectUnit(unit, true)
+            end
         end
         return
     end
@@ -2097,6 +2347,7 @@ function Addon:ProcessInspectQueue(elapsed)
         attempts = attempts - 1
         local item = tremove(self.inspectQueue, 1)
         self.inspectQueued[item.key] = nil
+        if self.pendingSpecVerifications[item.key] then
         local validUnit = UnitExists and UnitExists(item.unit)
             and self:NormalizeName(UnitName(item.unit)) == item.key
             and (not UnitIsConnected or UnitIsConnected(item.unit))
@@ -2116,8 +2367,45 @@ function Addon:ProcessInspectQueue(elapsed)
                 NotifyInspect(item.unit)
                 return
             end
-            self:QueueInspectUnit(item.unit)
+            self:QueueInspectUnit(item.unit, false)
         end
+        end
+    end
+end
+
+function Addon:IsGroupCombatActive()
+    if not UnitAffectingCombat then
+        return false
+    end
+    for _, unit in ipairs(self:GetGroupUnitTokens()) do
+        if (not UnitExists or UnitExists(unit)) and UnitAffectingCombat(unit) then
+            return true
+        end
+    end
+    return false
+end
+
+function Addon:ProcessEncounterEnd(elapsed)
+    if not self.state.active or not self.encounterCombatObserved then
+        self.encounterEndElapsed = 0
+        self.encounterCombatCheckElapsed = 0
+        return
+    end
+
+    self.encounterCombatCheckElapsed = self.encounterCombatCheckElapsed + elapsed
+    if self.encounterCombatCheckElapsed < 1 then
+        return
+    end
+    local checkedElapsed = self.encounterCombatCheckElapsed
+    self.encounterCombatCheckElapsed = 0
+    if self:IsGroupCombatActive() then
+        self.encounterEndElapsed = 0
+        return
+    end
+
+    self.encounterEndElapsed = self.encounterEndElapsed + checkedElapsed
+    if self.encounterEndElapsed >= 3 then
+        self:StopEncounter("combat_end", false)
     end
 end
 
@@ -2184,10 +2472,11 @@ function Addon:ImportRaidRoster()
 
     local message = L("Importación completada: %d puesto(s) rellenados por rol sin sobrescribir asignaciones existentes.", changed)
     if remaining > 0 then
-        message = message .. " " .. L("%d puesto(s) siguen vacíos hasta conocer una spec compatible o disponer de un miembro del rol.", remaining)
+        message = message .. " " .. L("%d puesto(s) siguen vacíos por no encontrar una clase compatible para ese rol.", remaining)
     end
     self:Print(message)
     if changed > 0 then
+        self:NormalizeCooldownAssignments()
         self:ScheduleAutoSync()
     end
     self:RefreshUI()
@@ -2256,6 +2545,8 @@ function Addon:CanSynchronizeConfiguration()
 end
 
 function Addon:ScheduleAutoSync()
+    self.lastValidationIssues = nil
+    self.validationHasRun = false
     if not self.db or not self.db.options.autoSync or self:IsConfigurationLocked() or self.receivingSync or not self:CanSynchronizeConfiguration() then
         return false
     end
@@ -2307,6 +2598,7 @@ function Addon:ProcessSyncUIRefresh(elapsed)
     self.syncUIRefreshElapsed = 0
     self:PrepareZoneAssignments()
     self:RebuildBiteSources()
+    self:NormalizeCooldownAssignments()
     self:RefreshUI(true)
 end
 
@@ -2508,7 +2800,14 @@ function Addon:SyncConfiguration(silent)
     }
     for _, slot in ipairs(self.SLOT_ORDER) do
         local record = self.db.roster[slot]
-        tinsert(records, { "ROSTER", slot, record.name, record.spec, record.role or "" })
+        tinsert(records, {
+            "ROSTER",
+            slot,
+            record.name,
+            record.spec,
+            record.role or "",
+            self:GetRosterClassKey(slot) or "",
+        })
     end
     for index, edge in ipairs(self.db.bites) do
         tinsert(records, { "BITE", index, edge.wave, edge.source, edge.target })
@@ -2644,6 +2943,8 @@ function Addon:ReceiveSync(message, sender, distribution)
         self.receivingSync = sender
         self.receivingSyncVersion = tonumber(fields[2]) or 1
         self.receivingSyncId = fields[3]
+        self.lastValidationIssues = nil
+        self.validationHasRun = false
     elseif kind == "END" then
         if receivingConfiguration then
             local completedSyncId = self.receivingSyncId
@@ -2655,6 +2956,7 @@ function Addon:ReceiveSync(message, sender, distribution)
             self.syncUIRefreshElapsed = 0
             self:PrepareZoneAssignments()
             self:RebuildBiteSources()
+            self:NormalizeCooldownAssignments()
             self:RefreshUI(true)
             local channel = distribution or self:GetAddonChannel()
             if channel and completedSyncId and completedSyncId == fields[2] then
@@ -2672,6 +2974,7 @@ function Addon:ReceiveSync(message, sender, distribution)
         end
         local specId = self:NormalizeSpecId(fields[4])
         record.spec = self:IsSpecAllowedForSlot(slot, specId) and specId or ""
+        self:RememberPlayerProfile(record.name, fields[6], record.spec, nil, nil, "sync")
         self:RememberRosterPlayer(slot, "sync")
         self:ScheduleSyncUIRefresh()
     elseif kind == "BITE" and receivingConfiguration then
@@ -2708,6 +3011,9 @@ function Addon:ReceiveSync(message, sender, distribution)
         self.state.currentWave = tonumber(fields[3]) or 1
         self.state.initialBiteDetected = self.state.currentWave > 1
         if self.state.active then
+            self.encounterCombatObserved = self:IsGroupCombatActive()
+            self.encounterEndElapsed = 0
+            self.encounterCombatCheckElapsed = 0
             self:CancelAutoSync()
             self:DiscardQueuedConfigurationSync()
             self.receivingSync = nil
@@ -2778,6 +3084,18 @@ function Addon:OnAddonLoaded(addonName)
         hideOnEscape = true,
         preferredIndex = 3,
     }
+    StaticPopupDialogs.BQLMANAGER_CONFIRM_CLEAR_ROSTER = {
+        text = L("¿Limpiar todos los jugadores y specs de la plantilla?"),
+        button1 = YES,
+        button2 = NO,
+        OnAccept = function()
+            Addon:ClearRoster()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
 
     self:Print(L("Cargado. Usa /bql para abrir la ventana."))
 end
@@ -2805,6 +3123,9 @@ Addon.eventFrame:SetScript("OnEvent", function(_, event, ...)
             Addon:ReceiveSync(message, sender, channel)
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
+        Addon.encounterCombatObserved = true
+        Addon.encounterEndElapsed = 0
+        Addon.encounterCombatCheckElapsed = 0
         if Addon.db and Addon.db.options.autoStart and not Addon.state.active and Addon:CanEditConfiguration(true) and Addon:IsBossName(UnitName("target")) then
             Addon:StartEncounter(true)
         end
@@ -2830,6 +3151,7 @@ end)
 Addon.eventFrame:SetScript("OnUpdate", function(_, elapsed)
     Addon:ProcessMessageQueue(elapsed)
     Addon:ProcessInspectQueue(elapsed)
+    Addon:ProcessEncounterEnd(elapsed)
     Addon:ProcessAutoSync(elapsed)
     Addon:ProcessSyncReport(elapsed)
     Addon:ProcessSyncUIRefresh(elapsed)

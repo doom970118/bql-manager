@@ -25,9 +25,9 @@ def main() -> None:
     assert 'Addon:SetCooldownAssignment("threat", currentIndex, "target", slot)' in cooldown_panel
     assert cooldown_panel.count("Addon:IsCooldownSlotEligible") == 3
     assert cooldown_panel.count("end, nil, true)") == 3
-    assert "self:SetRosterSlotSelectorValue(row.source, record.source)" in refresh
-    assert "self:SetRosterSlotSelectorValue(row.target, record.target)" in refresh
-    assert "self:SetRosterSlotSelectorValue(row.slot, record.slot)" in refresh
+    assert "self:SetRosterSlotSelectorValue(row.source, sourceSlot)" in refresh
+    assert "self:SetRosterSlotSelectorValue(row.target, targetSlot)" in refresh
+    assert "self:SetRosterSlotSelectorValue(row.slot, displaySlot)" in refresh
 
     eligibility = CORE.split("function Addon:IsCooldownSlotEligible", 1)[1].split(
         "function Addon:SetCooldownAssignment", 1
@@ -43,6 +43,10 @@ def main() -> None:
     )
     for rule in expected_rules:
         assert rule in eligibility
+    assert "self:GetCooldownRequiredClass(kind)" in eligibility
+    assert "classKey ~= requiredClass" in eligibility
+    assert "self:IsPlaceholder(slot, slotRecord.name)" in eligibility
+    assert "self.verifiedGroupSpecs[self:NormalizeName(slotRecord.name)]" in eligibility
     assert 'role == "TANK" or slot == self:GetFirstBiteTarget()' in eligibility
     assert 'role == "MDPS" or role == "RDPS"' in eligibility
     assert 'if slot == "" then' in eligibility
@@ -75,6 +79,8 @@ def main() -> None:
     assert "otherRecord[field] = record[field]" in setter
     assert setter.index("otherRecord[field] = record[field]") < setter.index("record[field] = slot")
     assert "function Addon:GetFirstBiteTarget" in CORE
+    assert "function Addon:NormalizeCooldownAssignments()" in CORE
+    assert "self:NormalizeCooldownAssignments()" in CORE
     assert '"target", record.target, false' in CORE
     assert 'local userField = group == "threat" and "source" or "slot"' in CORE
     assert "cooldownGroupNames" in CORE

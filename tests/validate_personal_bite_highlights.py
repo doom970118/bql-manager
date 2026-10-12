@@ -108,10 +108,14 @@ def main() -> None:
         '"Probar las mordidas"',
         '"Jugador mordedor"',
         '"Jugador mordido"',
-        'CreateButton(panel, "Probar"',
+        'CreateButton(bites, "Probar"',
         "Addon.BiteHighlights:StartTest",
     ):
         assert snippet in options
+    assert 'CreateButton(panel, "General"' in options
+    assert 'CreateButton(panel, "Mordidas"' in options
+    assert 'self.optionSections.general = general' in options
+    assert 'self.optionSections.bites = bites' in options
     assert '{ key = "options", label = "Opciones" }' in UI
     assert "self:RefreshOptions()" in UI
 

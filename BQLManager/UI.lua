@@ -865,7 +865,7 @@ function UI:CreateMainFrame()
     SetBackdrop(frame, COLORS.darkPurple, COLORS.border)
 
     frame:SetScript("OnDragStart", function(self)
-        if not Addon.db.options.locked and not Addon:IsConfigurationLocked() then
+        if not Addon.db.options.locked then
             self:StartMoving()
         end
     end)
@@ -990,6 +990,7 @@ function UI:CreateSummaryPanel(parent)
         Addon:ValidateAndReport()
         UI:Refresh()
     end)
+    self.validateButton = validate
     validate:SetPoint("LEFT", sync, "RIGHT", 5, 0)
 
     self.summaryState = CreateText(panel, "GameFontHighlight", "", "TOPLEFT", panel, "TOPLEFT", 18, -82)
@@ -1005,38 +1006,8 @@ function UI:CreateSummaryPanel(parent)
         self.waveTexts[wave] = label
     end
 
-    CreateSectionTitle(panel, "Opciones", 16, -278)
-    self.autoStartCheck = CreateCheck(panel, "Inicio automático al detectar a Lana'thel", function(button)
-        Addon.db.options.autoStart = button:GetChecked() and true or false
-    end)
-    self.autoStartCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -306)
-
-    self.whisperCheck = CreateCheck(panel, "Susurrar objetivos de mordida", function(button)
-        Addon.db.options.whisperAssignments = button:GetChecked() and true or false
-    end)
-    self.whisperCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -334)
-
-    self.warningCheck = CreateCheck(panel, "Usar aviso de banda si tengo permisos", function(button)
-        Addon.db.options.raidWarnings = button:GetChecked() and true or false
-    end)
-    self.warningCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 310, -306)
-
-    self.syncCheck = CreateCheck(panel, "Aceptar sincronización de líder/asistentes", function(button)
-        Addon.db.options.acceptSync = button:GetChecked() and true or false
-    end)
-    self.syncCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 310, -334)
-
-    self.autoSyncCheck = CreateCheck(panel, "Auto-sincronización", function(button)
-        Addon.db.options.autoSync = button:GetChecked() and true or false
-        if Addon.db.options.autoSync then
-            Addon:ScheduleAutoSync()
-        else
-            Addon:CancelAutoSync()
-        end
-    end)
-    self.autoSyncCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -362)
-
-    self.validationText = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -394)
+    CreateSectionTitle(panel, "Validación manual", 16, -278)
+    self.validationText = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -310)
     self.validationText:SetWidth(775)
     self.validationText:SetHeight(38)
     self.validationText:SetJustifyH("LEFT")
@@ -1053,7 +1024,7 @@ function UI:CreateRosterPanel(parent)
     self.rosterTotal = CreateText(panel, "GameFontDisableSmall", "", "TOPLEFT", panel, "TOPLEFT", 103, -18)
     self.rosterTotal:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
-    local roleX = { TANK = 190, MDPS = 295, RDPS = 400, HEALER = 505 }
+    local roleX = { TANK = 145, MDPS = 235, RDPS = 325, HEALER = 415 }
     for _, role in ipairs(Addon.ROLE_ORDER) do
         local x = roleX[role]
         local currentRole = role
@@ -1073,11 +1044,23 @@ function UI:CreateRosterPanel(parent)
         self.roleControls[role] = control
     end
 
-    local import = CreateButton(panel, "Completar desde banda", 160, 22, function()
+    local import = CreateButton(panel, "Completar desde banda", 150, 22, function()
         Addon:ImportRaidRoster()
     end)
     self.importButton = import
     import:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -10)
+
+    local verify = CreateButton(panel, "Verificar specs", 108, 22, function()
+        Addon:VerifyRosterSpecializations()
+    end)
+    self.verifySpecsButton = verify
+    verify:SetPoint("RIGHT", import, "LEFT", -5, 0)
+
+    local clear = CreateButton(panel, "Limpiar plantilla", 115, 22, function()
+        StaticPopup_Show("BQLMANAGER_CONFIRM_CLEAR_ROSTER")
+    end)
+    self.clearRosterButton = clear
+    clear:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -15, -36)
 
     local columns = {
         { x = 16, startIndex = 1, endIndex = 13 },
@@ -1446,17 +1429,90 @@ function UI:EnsureHighlightTestSlots()
     end
 end
 
+function UI:ShowOptionsSection(key)
+    self.currentOptionsSection = key
+    for sectionKey, section in pairs(self.optionSections or {}) do
+        if sectionKey == key then
+            section:Show()
+        else
+            section:Hide()
+        end
+    end
+    for sectionKey, button in pairs(self.optionTabs or {}) do
+        if sectionKey == key then
+            button:Disable()
+        else
+            button:Enable()
+        end
+    end
+end
+
 function UI:CreateOptionsPanel(parent)
     local panel = CreatePanel(parent)
     self.panels.options = panel
+    self.optionTabs = {}
+    self.optionSections = {}
 
-    CreateSectionTitle(panel, "Ayudas personales de mordida", 16, -14)
+    local generalTab = CreateButton(panel, "General", 104, 22, function()
+        UI:ShowOptionsSection("general")
+    end)
+    generalTab:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -12)
+    self.optionTabs.general = generalTab
+
+    local bitesTab = CreateButton(panel, "Mordidas", 104, 22, function()
+        UI:ShowOptionsSection("bites")
+    end)
+    bitesTab:SetPoint("LEFT", generalTab, "RIGHT", 6, 0)
+    self.optionTabs.bites = bitesTab
+
+    local general = CreateFrame("Frame", nil, panel)
+    general:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -42)
+    general:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+    self.optionSections.general = general
+
+    CreateSectionTitle(general, "Opciones generales", 16, -14)
+    self.autoStartCheck = CreateCheck(general, "Inicio automático al detectar a Lana'thel", function(button)
+        Addon.db.options.autoStart = button:GetChecked() and true or false
+    end)
+    self.autoStartCheck:SetPoint("TOPLEFT", general, "TOPLEFT", 18, -52)
+
+    self.whisperCheck = CreateCheck(general, "Susurrar objetivos de mordida", function(button)
+        Addon.db.options.whisperAssignments = button:GetChecked() and true or false
+    end)
+    self.whisperCheck:SetPoint("TOPLEFT", general, "TOPLEFT", 18, -84)
+
+    self.warningCheck = CreateCheck(general, "Usar aviso de banda si tengo permisos", function(button)
+        Addon.db.options.raidWarnings = button:GetChecked() and true or false
+    end)
+    self.warningCheck:SetPoint("TOPLEFT", general, "TOPLEFT", 360, -52)
+
+    self.syncCheck = CreateCheck(general, "Aceptar sincronización de líder/asistentes", function(button)
+        Addon.db.options.acceptSync = button:GetChecked() and true or false
+    end)
+    self.syncCheck:SetPoint("TOPLEFT", general, "TOPLEFT", 360, -84)
+
+    self.autoSyncCheck = CreateCheck(general, "Auto-sincronización", function(button)
+        Addon.db.options.autoSync = button:GetChecked() and true or false
+        if Addon.db.options.autoSync then
+            Addon:ScheduleAutoSync()
+        else
+            Addon:CancelAutoSync()
+        end
+    end)
+    self.autoSyncCheck:SetPoint("TOPLEFT", general, "TOPLEFT", 18, -116)
+
+    local bites = CreateFrame("Frame", nil, panel)
+    bites:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -42)
+    bites:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+    self.optionSections.bites = bites
+
+    CreateSectionTitle(bites, "Ayudas personales de mordida", 16, -14)
     local description = CreateText(
-        panel,
+        bites,
         "GameFontHighlightSmall",
         "Resalta localmente al jugador relacionado contigo. Las placas amistosas solo se activan durante una prueba o cuando el mordedor recibe Sed de sangre frenética; se restauran después de la mordida.",
         "TOPLEFT",
-        panel,
+        bites,
         "TOPLEFT",
         18,
         -47
@@ -1464,21 +1520,21 @@ function UI:CreateOptionsPanel(parent)
     description:SetWidth(760)
     description:SetJustifyH("LEFT")
 
-    self.biteHighlightsCheck = CreateCheck(panel, "Mostrar iconos locales y resaltar barras", function(button)
+    self.biteHighlightsCheck = CreateCheck(bites, "Mostrar iconos locales y resaltar barras", function(button)
         Addon.db.options.biteHighlights = button:GetChecked() and true or false
         if Addon.BiteHighlights then
             Addon.BiteHighlights:RefreshNow()
         end
     end)
-    self.biteHighlightsCheck:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -78)
+    self.biteHighlightsCheck:SetPoint("TOPLEFT", bites, "TOPLEFT", 18, -78)
 
-    CreateSectionTitle(panel, "Probar las mordidas", 16, -128)
+    CreateSectionTitle(bites, "Probar las mordidas", 16, -128)
     local testHelp = CreateText(
-        panel,
+        bites,
         "GameFontDisableSmall",
         "Elige dos jugadores visibles. La prueba muestra MORDEDOR en morado y MORDER en rojo durante 15 segundos.",
         "TOPLEFT",
-        panel,
+        bites,
         "TOPLEFT",
         18,
         -160
@@ -1486,8 +1542,8 @@ function UI:CreateOptionsPanel(parent)
     testHelp:SetWidth(760)
     testHelp:SetJustifyH("LEFT")
 
-    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 18, -200)
-    self.highlightSourceSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+    CreateText(bites, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", bites, "TOPLEFT", 18, -200)
+    self.highlightSourceSelector = CreateRosterSlotSelector(bites, 220, function(slot)
         UI.highlightTestSourceSlot = slot
         if UI.highlightTestTargetSlot == slot then
             UI.highlightTestTargetSlot = nil
@@ -1496,49 +1552,50 @@ function UI:CreateOptionsPanel(parent)
     end, nil, function(slot)
         return UI:IsHighlightTestSlotAvailable(slot)
     end, true)
-    self.highlightSourceSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 18, -219)
+    self.highlightSourceSelector:SetPoint("TOPLEFT", bites, "TOPLEFT", 18, -219)
 
-    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 270, -200)
-    self.highlightTargetSelector = CreateRosterSlotSelector(panel, 220, function(slot)
+    CreateText(bites, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", bites, "TOPLEFT", 270, -200)
+    self.highlightTargetSelector = CreateRosterSlotSelector(bites, 220, function(slot)
         UI.highlightTestTargetSlot = slot
         UI:RefreshOptions()
     end, nil, function(slot)
         return UI:IsHighlightTestSlotAvailable(slot) and slot ~= UI.highlightTestSourceSlot
     end, true)
-    self.highlightTargetSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -219)
+    self.highlightTargetSelector:SetPoint("TOPLEFT", bites, "TOPLEFT", 270, -219)
 
-    self.highlightTestButton = CreateButton(panel, "Probar", 100, 24, function()
+    self.highlightTestButton = CreateButton(bites, "Probar", 100, 24, function()
         UI:EnsureHighlightTestSlots()
         if Addon.BiteHighlights then
             Addon.BiteHighlights:StartTest(UI.highlightTestSourceSlot, UI.highlightTestTargetSlot)
         end
         UI:RefreshOptions()
     end)
-    self.highlightTestButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 520, -217)
+    self.highlightTestButton:SetPoint("TOPLEFT", bites, "TOPLEFT", 520, -217)
 
-    self.highlightStopButton = CreateButton(panel, "Detener prueba", 120, 24, function()
+    self.highlightStopButton = CreateButton(bites, "Detener prueba", 120, 24, function()
         if Addon.BiteHighlights then
             Addon.BiteHighlights:StopTest()
         end
     end)
     self.highlightStopButton:SetPoint("LEFT", self.highlightTestButton, "RIGHT", 6, 0)
 
-    self.highlightTestStatus = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 18, -262)
+    self.highlightTestStatus = CreateText(bites, "GameFontHighlightSmall", "", "TOPLEFT", bites, "TOPLEFT", 18, -262)
     self.highlightTestStatus:SetWidth(760)
     self.highlightTestStatus:SetJustifyH("LEFT")
 
-    CreateSectionTitle(panel, "Significado visual", 16, -308)
+    CreateSectionTitle(bites, "Significado visual", 16, -308)
     local legend = CreateText(
-        panel,
+        bites,
         "GameFontHighlightSmall",
         "Rojo: jugador al que debes morder.    Morado: jugador que debe morderte.",
         "TOPLEFT",
-        panel,
+        bites,
         "TOPLEFT",
         18,
         -340
     )
     legend:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+    self:ShowOptionsSection("general")
 end
 
 function UI:ShowTab(key, skipRefresh)
@@ -1601,13 +1658,13 @@ function UI:RefreshSummary()
         end
     end
 
-    self.autoStartCheck:SetChecked(Addon.db.options.autoStart)
-    self.whisperCheck:SetChecked(Addon.db.options.whisperAssignments)
-    self.warningCheck:SetChecked(Addon.db.options.raidWarnings)
-    self.syncCheck:SetChecked(Addon.db.options.acceptSync)
-    self.autoSyncCheck:SetChecked(Addon.db.options.autoSync)
+    if not Addon.validationHasRun then
+        self.validationText:SetText(L("Pulsa Validar para comprobar manualmente la configuración."))
+        self.validationText:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+        return
+    end
 
-    local issues = Addon:GetValidationIssues()
+    local issues = Addon.lastValidationIssues or {}
     if #issues == 0 then
         self.validationText:SetText(L("Validación correcta. La plantilla y el árbol de mordidas no tienen conflictos."))
         self.validationText:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
@@ -1730,14 +1787,20 @@ function UI:RefreshCooldowns()
         local record = Addon.db.cooldowns[row.group][row.index]
         row.label:SetText(L(record.label or ""))
         if row.group == "threat" then
-            self:SetRosterSlotSelectorValue(row.source, record.source)
-            self:SetRosterSlotSelectorValue(row.target, record.target)
-            local sourceName = record.source and record.source ~= "" and Addon:GetSlotName(record.source) or L("Sin asignar")
-            local targetName = record.target and record.target ~= "" and Addon:GetSlotName(record.target) or L("Sin asignar")
+            local sourceValid = Addon:IsCooldownSlotEligible(row.group, row.index, "source", record.source, false)
+            local targetValid = Addon:IsCooldownSlotEligible(row.group, row.index, "target", record.target, false)
+            local sourceSlot = sourceValid and record.source or ""
+            local targetSlot = targetValid and record.target or ""
+            self:SetRosterSlotSelectorValue(row.source, sourceSlot)
+            self:SetRosterSlotSelectorValue(row.target, targetSlot)
+            local sourceName = sourceSlot ~= "" and Addon:GetSlotName(sourceSlot) or L("Sin asignar")
+            local targetName = targetSlot ~= "" and Addon:GetSlotName(targetSlot) or L("Sin asignar")
             row.name:SetText(sourceName .. " > " .. targetName)
         else
-            self:SetRosterSlotSelectorValue(row.slot, record.slot)
-            local slotName = record.slot and record.slot ~= "" and Addon:GetSlotName(record.slot) or L("Sin asignar")
+            local slotValid = Addon:IsCooldownSlotEligible(row.group, row.index, "slot", record.slot, false)
+            local displaySlot = slotValid and record.slot or ""
+            self:SetRosterSlotSelectorValue(row.slot, displaySlot)
+            local slotName = displaySlot ~= "" and Addon:GetSlotName(displaySlot) or L("Sin asignar")
             row.name:SetText(slotName)
         end
     end
@@ -1769,6 +1832,11 @@ function UI:RefreshOptions()
     if not self.biteHighlightsCheck then
         return
     end
+    self.autoStartCheck:SetChecked(Addon.db.options.autoStart)
+    self.whisperCheck:SetChecked(Addon.db.options.whisperAssignments)
+    self.warningCheck:SetChecked(Addon.db.options.raidWarnings)
+    self.syncCheck:SetChecked(Addon.db.options.acceptSync)
+    self.autoSyncCheck:SetChecked(Addon.db.options.autoSync)
     self:EnsureHighlightTestSlots()
     self.biteHighlightsCheck:SetChecked(Addon.db.options.biteHighlights)
     self:SetRosterSlotSelectorValue(self.highlightSourceSelector, self.highlightTestSourceSlot)
@@ -1801,7 +1869,10 @@ function UI:RefreshConfigurationLock()
         self.resetButton,
         self.announceButton,
         self.syncButton,
+        self.validateButton,
         self.importButton,
+        self.verifySpecsButton,
+        self.clearRosterButton,
         self.autoStartCheck,
         self.whisperCheck,
         self.warningCheck,
@@ -1816,6 +1887,10 @@ function UI:RefreshConfigurationLock()
         else
             control:Enable()
         end
+    end
+    if not locked and Addon.rosterVerification then
+        self.verifySpecsButton:Disable()
+        self.clearRosterButton:Disable()
     end
     if encounterLocked and canEdit then
         self.stopButton:Enable()
