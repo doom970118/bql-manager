@@ -65,7 +65,7 @@ El botón `Verificar specs` inicia la única inspección de talentos del addon. 
 
 En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los orígenes de las rondas siguientes se recalculan automáticamente. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
 
-Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
+Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve temporalmente su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Al terminar el combate, matar a Lana'thel o pulsar `Detener`, restaura el orden que estaba planificado antes del intento. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
 
 En `Zonas`, haz clic sobre una posición del mapa para elegir un puesto compatible. Las zonas de tanque solo muestran tanques, las melee solo MDPS, las ranged solo RDPS y las de sanación solo healers. El menú muestra `puesto · jugador`; si el puesto ya estaba colocado en otra posición, ambos se intercambian. El mapa guarda y sincroniza esta distribución.
 
