@@ -36,6 +36,7 @@ Addon.state = {
     startedAt = nil,
     initialBiteDetected = false,
 }
+Addon.plannedBitesSnapshot = nil
 
 Addon.messageQueue = {}
 Addon.queueElapsed = 0
@@ -1415,6 +1416,26 @@ function Addon:AnnounceFullPlan()
     return true
 end
 
+function Addon:CapturePlannedBites()
+    if not self.db or type(self.db.bites) ~= "table" then
+        self.plannedBitesSnapshot = nil
+        return false
+    end
+    self.plannedBitesSnapshot = DeepCopy(self.db.bites)
+    return true
+end
+
+function Addon:RestorePlannedBites()
+    local snapshot = self.plannedBitesSnapshot
+    self.plannedBitesSnapshot = nil
+    if not self.db or type(snapshot) ~= "table" then
+        return false
+    end
+    self.db.bites = DeepCopy(snapshot)
+    self:RebuildBiteSources()
+    return true
+end
+
 function Addon:StartEncounter(announce)
     if not self:CanEditConfiguration() then
         return false
@@ -1425,6 +1446,7 @@ function Addon:StartEncounter(announce)
     end
     self:CancelAutoSync()
     self:DiscardQueuedConfigurationSync()
+    self:CapturePlannedBites()
     self.state.active = true
     self.state.currentWave = 1
     self.state.completed = {}
@@ -1452,6 +1474,7 @@ function Addon:StopEncounter(reason, announce)
         return false
     end
     self.state.active = false
+    self:RestorePlannedBites()
     self.encounterCombatObserved = false
     self.encounterEndElapsed = 0
     self.encounterCombatCheckElapsed = 0
@@ -1500,6 +1523,7 @@ function Addon:SetWave(wave, announce)
         wave = 5
     end
 
+    self:CapturePlannedBites()
     self.state.currentWave = wave
     self.state.active = true
     self.state.completed = {}
@@ -1591,6 +1615,9 @@ function Addon:DetectInitialBossBite(sourceName, targetName)
     end
 
     local plannedSlot = firstBite.edge.target
+    if not self.plannedBitesSnapshot then
+        self:CapturePlannedBites()
+    end
     if not self:SetBiteTarget(firstBite.index, targetSlot, true, true) then
         self:Print(L("No se pudo adaptar el árbol a la primera mordida de %s.", tostring(targetName)))
         return false
@@ -3011,7 +3038,14 @@ function Addon:ReceiveSync(message, sender, distribution)
         self.db.zoneAssignments[fields[2]] = fields[3] or ""
         self:ScheduleSyncUIRefresh()
     elseif kind == "STATE" then
-        self.state.active = tonumber(fields[2]) == 1
+        local wasActive = self.state.active
+        local isActive = tonumber(fields[2]) == 1
+        if isActive and not wasActive then
+            self:CapturePlannedBites()
+        elseif not isActive and wasActive then
+            self:RestorePlannedBites()
+        end
+        self.state.active = isActive
         self.state.currentWave = tonumber(fields[3]) or 1
         self.state.initialBiteDetected = self.state.currentWave > 1
         if self.state.active then

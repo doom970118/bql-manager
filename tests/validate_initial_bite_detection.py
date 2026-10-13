@@ -9,8 +9,8 @@ TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
 def main() -> None:
-    assert 'Addon.VERSION = "1.15.5"' in DEFAULTS
-    assert "## Version: 1.15.5" in TOC
+    assert 'Addon.VERSION = "1.15.6"' in DEFAULTS
+    assert "## Version: 1.15.6" in TOC
     assert "initialBiteDetected = false" in CORE
 
     detection = CORE.split("function Addon:DetectInitialBossBite", 1)[1].split(
@@ -37,12 +37,37 @@ def main() -> None:
     start = CORE.split("function Addon:StartEncounter", 1)[1].split(
         "function Addon:StopEncounter", 1
     )[0]
+    stop = CORE.split("function Addon:StopEncounter", 1)[1].split(
+        "function Addon:ResetEncounter", 1
+    )[0]
     reset = CORE.split("function Addon:ResetEncounter", 1)[1].split(
         "function Addon:SetWave", 1
     )[0]
     assert "self.state.initialBiteDetected = false" in start
+    assert "self:CapturePlannedBites()" in start
+    assert "self:RestorePlannedBites()" in stop
     assert "self.state.initialBiteDetected = false" in reset
     assert "self.state.initialBiteDetected = self.state.currentWave > 1" in CORE
+
+    capture = CORE.split("function Addon:CapturePlannedBites", 1)[1].split(
+        "function Addon:RestorePlannedBites", 1
+    )[0]
+    restore = CORE.split("function Addon:RestorePlannedBites", 1)[1].split(
+        "function Addon:StartEncounter", 1
+    )[0]
+    assert "DeepCopy(self.db.bites)" in capture
+    assert "self.db.bites = DeepCopy(snapshot)" in restore
+    assert "self:RebuildBiteSources()" in restore
+    assert "self.plannedBitesSnapshot = nil" in restore
+
+    receive_state = CORE.split('elseif kind == "STATE" then', 1)[1].split(
+        "self:RefreshUI()", 1
+    )[0]
+    assert "local wasActive = self.state.active" in receive_state
+    assert "if isActive and not wasActive then" in receive_state
+    assert "elseif not isActive and wasActive then" in receive_state
+    assert "self:CapturePlannedBites()" in receive_state
+    assert "self:RestorePlannedBites()" in receive_state
 
     print("Unexpected initial boss bite detection and tree adaptation passed.")
 
