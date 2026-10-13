@@ -115,6 +115,8 @@ def main() -> None:
         "strlen(preview) > self.MAX_ADDON_MESSAGE_BYTES",
         "index == total",
         "function Addon:ReceivePackedSync(fields, sender, distribution)",
+        "self:GetRosterClassKey(slot) or",
+        "self:RememberPlayerProfile(record.name, fields[6]",
         "packed.nextIndex ~= packetIndex",
         "self:ReceiveSync(record, sender, distribution)",
     ):

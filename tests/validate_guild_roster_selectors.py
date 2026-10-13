@@ -40,10 +40,10 @@ def main() -> None:
     assert 'inferred and "manual" or member.specSource' in assignment
     assert "self:GetGroupUnitForName(member.name)" in assignment
     assert "UnitClass(unit)" in assignment
-    assert "self:IsUnitInInspectRange(unit)" in assignment
-    assert "self.pendingRosterAssignments[key]" in assignment
-    assert "self:QueueInspectUnit(unit, true)" in assignment
-    assert "normalizedVerifiedSpec and not self:IsSpecAllowedForSlot" in assignment
+    assert "self:IsUnitInInspectRange(unit)" not in assignment
+    assert "self.pendingSpecVerifications" not in assignment
+    assert "self:QueueInspectUnit" not in assignment
+    assert "self:DetectTalentSpec" not in assignment
 
     clear_slot = CORE.split("function Addon:ClearRosterSlot", 1)[1].split(
         "function Addon:AssignGuildMemberToSlot", 1
@@ -61,19 +61,29 @@ def main() -> None:
     assert "NotifyInspect(item.unit)" in inspection
     assert "function Addon:GetGroupUnitForName" in CORE
     assert "function Addon:IsUnitInInspectRange" in CORE
-    assert "self.pendingRosterAssignments[key]" in inspection
-    assert "self:AssignGuildMemberToSlot(assignmentRequest.slot, assignmentRequest.name, specId, classKey)" in inspection
+    assert "self.pendingSpecVerifications[key]" in inspection
+    assert "function Addon:VerifyRosterSpecializations()" in inspection
+    assert "self:ApplyRosterSpecVerification" in inspection
+    assert "function Addon:FindEmptyCompatibleRosterSlot" in inspection
+    assert "self:IsSpecAllowedForSlot(candidateSlot, specId)" in inspection
+    assert "self:IsPlaceholder(candidateSlot, candidate.name)" in inspection
+    assert 'record.name = ""' in inspection
+    assert 'record.spec = ""' in inspection
+    assert "destination.name = name" in inspection
+    assert "destination.spec = normalizedSpec" in inspection
+    assert "local rosterSnapshot = {}" in inspection
+    assert "for _, assignment in ipairs(rosterSnapshot)" in inspection
     inspect_ready = CORE.split("function Addon:HandleInspectReady", 1)[1].split(
         "function Addon:ProcessInspectQueue", 1
     )[0]
     assert "self:RefreshUI()" not in inspect_ready
     assert "member.inGroup = false" in inspection
     assert "member.inGroup = hasGroup and true or false" in inspection
-    assert "not member.inGroup" in inspection
     refresh_group = CORE.split("function Addon:RefreshGroupMemberProfiles", 1)[1].split(
-        "function Addon:HandleInspectReady", 1
+        "function Addon:FinishRosterSpecVerification", 1
     )[0]
     assert "self:QueueInspectUnit(unit)" not in refresh_group
+    assert "self:DetectTalentSpec" not in refresh_group
     assert '"inspect"' in inspection
     assert 'RegisterEvent("INSPECT_READY")' in CORE
     assert 'RegisterEvent("INSPECT_TALENT_READY")' in CORE
@@ -82,7 +92,9 @@ def main() -> None:
     assert 'RegisterEvent("GUILD_ROSTER_UPDATE")' in CORE
     assert "Addon:ProcessInspectQueue(elapsed)" in CORE
     assert "Addon.INSPECT_ASSIGNMENT_TIMEOUT = 12.0" in CORE
+    assert "Addon.INSPECT_VERIFICATION_QUEUE_TIMEOUT = 60.0" in CORE
     assert "request.elapsed >= self.INSPECT_ASSIGNMENT_TIMEOUT" in CORE
+    assert "request.waitElapsed >= self.INSPECT_VERIFICATION_QUEUE_TIMEOUT" in CORE
     assert "No se pudo validar la especialización de %s" in CORE
     timeout_cleanup = CORE.split("function Addon:ProcessInspectQueue", 1)[1].split(
         "if self.pendingInspect then", 1
@@ -93,6 +105,18 @@ def main() -> None:
         "function UI:CreateBitesPanel", 1
     )[0]
     assert "row.name = CreateGuildMemberSelector(panel, 150, slot)" in roster_panel
+    assert 'CreateButton(panel, "Verificar specs"' in roster_panel
+    assert 'CreateButton(panel, "Limpiar plantilla"' in roster_panel
+    assert 'StaticPopup_Show("BQLMANAGER_CONFIRM_CLEAR_ROSTER")' in roster_panel
+    clear_roster = CORE.split("function Addon:ClearRoster()", 1)[1].split(
+        "function Addon:CancelPendingSpecVerificationForSlot", 1
+    )[0]
+    assert "for _, slot in ipairs(self.SLOT_ORDER)" in clear_roster
+    assert 'record.name = ""' in clear_roster
+    assert 'record.spec = ""' in clear_roster
+    assert "record.role" not in clear_roster
+    assert "self:NormalizeCooldownAssignments()" in clear_roster
+    assert "self:ScheduleAutoSync()" in clear_roster
     assert 'SetRosterValue(currentSlot, "name"' not in roster_panel
 
     selector = UI.split("local function CreateGuildMemberSelector", 1)[1].split(
@@ -136,10 +160,6 @@ def main() -> None:
     def nearby_assignment(class_roles: set[str], current_spec_roles: set[str] | None, role: str) -> str:
         if role not in class_roles:
             return "class_rejected"
-        if current_spec_roles is None:
-            return "inspect_first"
-        if role not in current_spec_roles:
-            return "spec_rejected"
         return "assigned"
 
     assert eligible(None, "MDPS")
@@ -153,12 +173,12 @@ def main() -> None:
     assert spec_for_slot("SHAMAN_RESTORATION", "RDPS") == ("SHAMAN_ELEMENTAL", True)
     assert spec_for_slot("SHAMAN_RESTORATION", "MDPS") == ("SHAMAN_ENHANCEMENT", True)
     shaman_roles = {"MDPS", "RDPS", "HEALER"}
-    assert nearby_assignment(shaman_roles, None, "RDPS") == "inspect_first"
-    assert nearby_assignment(shaman_roles, {"HEALER"}, "RDPS") == "spec_rejected"
+    assert nearby_assignment(shaman_roles, None, "RDPS") == "assigned"
+    assert nearby_assignment(shaman_roles, {"HEALER"}, "RDPS") == "assigned"
     assert nearby_assignment(shaman_roles, {"RDPS"}, "RDPS") == "assigned"
     assert nearby_assignment(shaman_roles, {"RDPS"}, "TANK") == "class_rejected"
 
-    print("Persistent searchable guild roster, class icons, role filters, and inspect cache passed.")
+    print("Persistent roster, class-only assignment, and explicit manual spec verification passed.")
 
 
 if __name__ == "__main__":

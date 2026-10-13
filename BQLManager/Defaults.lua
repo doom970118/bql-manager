@@ -5,7 +5,7 @@ local L = function(text, ...)
 end
 
 Addon.NAME = "BQL Manager"
-Addon.VERSION = "1.14.9"
+Addon.VERSION = "1.15.5"
 Addon.DB_VERSION = 5
 Addon.MESSAGE_PREFIX = "BQLM1"
 
@@ -33,7 +33,7 @@ Addon.ROLE_SET = {}
 for _, role in ipairs(Addon.ROLE_ORDER) do
     Addon.ROLE_SET[role] = true
 end
-Addon.ROLE_MINIMUMS = { HEALER = 1 }
+Addon.ROLE_MINIMUMS = { TANK = 2, HEALER = 1 }
 Addon.ROLE_MAXIMUMS = { TANK = 2 }
 Addon.MAX_ROSTER_SIZE = 25
 
