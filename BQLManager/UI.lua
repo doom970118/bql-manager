@@ -55,6 +55,12 @@ local ROLE_ICON_TCOORDS = {
     HEALER = { 0.75, 1, 0, 1 },
 }
 
+local BITE_ICON_TEXTURE = "Interface\\Icons\\Spell_Shadow_LifeDrain02"
+if GetSpellInfo then
+    local _, _, detectedBiteIcon = GetSpellInfo(71726)
+    BITE_ICON_TEXTURE = detectedBiteIcon or BITE_ICON_TEXTURE
+end
+
 local function SetRoleIcon(texture, role, alpha)
     local coords = ROLE_ICON_TCOORDS[role] or ROLE_ICON_TCOORDS.RDPS
     texture:SetTexture(ROLE_ICON_TEXTURE)
@@ -734,7 +740,13 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
                     local spec = record and Addon:GetSpecDefinition(record.spec)
                     local info = UIDropDownMenu_CreateInfo()
                     local iconCoords
-                    info.text = Addon:GetSlotLabel(slot) .. " · " .. Addon:GetSlotName(slot)
+                    local slotLabel = Addon:GetSlotLabel(slot)
+                    local slotName = Addon:GetSlotName(slot)
+                    if selector.displayName then
+                        info.text = slotName .. " · " .. slotLabel
+                    else
+                        info.text = slotLabel .. " · " .. slotName
+                    end
                     info.value = slot
                     info.notCheckable = true
                     if spec then
@@ -779,6 +791,285 @@ local function CreateRosterSlotSelector(parent, width, callback, lockedValue, sl
     end)
 
     UI:SetRosterSlotSelectorValue(selector, lockedValue)
+    return selector
+end
+
+local BITE_SUGGESTION_ROWS = 8
+
+function UI:GetBitePlayerCandidates(selector, search)
+    local candidates = {}
+    local needle = string.lower(Addon:Trim(search or ""))
+    for _, slot in ipairs(Addon:GetActiveSlotOrder()) do
+        if not selector.slotFilter or selector.slotFilter(slot) then
+            local name = Addon:GetSlotName(slot)
+            local slotLabel = Addon:GetSlotLabel(slot)
+            if not Addon:IsPlaceholder(slot, name) then
+                local searchable = string.lower(tostring(name) .. " " .. tostring(slotLabel))
+                if needle == "" or string.find(searchable, needle, 1, true) then
+                    tinsert(candidates, {
+                        slot = slot,
+                        name = name,
+                        slotLabel = slotLabel,
+                    })
+                end
+            end
+        end
+    end
+    return candidates
+end
+
+function UI:SetBitePlayerSelectorValue(selector, slot)
+    if not selector or not selector.editBox then
+        return
+    end
+
+    selector.value = slot or ""
+    local displayName = L("Seleccionar...")
+    local color = COLORS.muted
+    if selector.value == "BOSS" then
+        displayName = Addon:GetSlotName("BOSS")
+        color = COLORS.boss
+    elseif Addon:IsSlotActive(selector.value) then
+        displayName = Addon:GetSlotName(selector.value)
+        color = GetSlotRoleColor(selector.value)
+    end
+
+    if not selector.editBox:HasFocus() then
+        selector.suppressSearch = true
+        selector.editBox:SetText(displayName)
+        selector.suppressSearch = false
+    end
+    selector.editBox:SetTextColor(color[1], color[2], color[3])
+end
+
+function UI:UpdateBitePlayerSuggestions(selector, resetOffset)
+    if resetOffset then
+        selector.offset = 1
+    end
+
+    local candidates = self:GetBitePlayerCandidates(selector, selector.search or "")
+    selector.candidates = candidates
+    local maximumOffset = #candidates - BITE_SUGGESTION_ROWS + 1
+    if maximumOffset < 1 then
+        maximumOffset = 1
+    end
+    if selector.offset > maximumOffset then
+        selector.offset = maximumOffset
+    elseif selector.offset < 1 then
+        selector.offset = 1
+    end
+
+    for rowIndex, button in ipairs(selector.suggestionButtons) do
+        local candidate = candidates[selector.offset + rowIndex - 1]
+        button.candidate = candidate
+        if candidate then
+            local record = Addon:GetSlotRecord(candidate.slot)
+            local spec = record and Addon:GetSpecDefinition(record.spec)
+            if spec then
+                button.icon:SetTexture(spec.icon)
+                button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                button.icon:SetVertexColor(1, 1, 1, 1)
+                button.icon:SetAlpha(1)
+            else
+                SetRoleIcon(button.icon, Addon:GetSlotRole(candidate.slot))
+            end
+            button.label:SetText(candidate.name)
+            local color = GetSlotRoleColor(candidate.slot)
+            button.label:SetTextColor(color[1], color[2], color[3])
+            button.slotLabel:SetText(candidate.slotLabel)
+            button.slotLabel:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+            button:Show()
+        elseif rowIndex == 1 and #candidates == 0 then
+            SetRoleIcon(button.icon, "RDPS", 0.45)
+            button.label:SetText(L("Sin coincidencias compatibles"))
+            button.label:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+            button.slotLabel:SetText("")
+            button:Show()
+        else
+            button:Hide()
+        end
+    end
+
+    selector.footer:SetText(L("%d candidato(s) · rueda para desplazar", #candidates))
+end
+
+function UI:ShowBitePlayerSuggestions(selector, resetOffset)
+    if self.activeBiteSelector and self.activeBiteSelector ~= selector then
+        self.activeBiteSelector.popup:Hide()
+    end
+    self.activeBiteSelector = selector
+    local popup = selector.popup
+    popup.ownerSelector = selector
+    self:UpdateBitePlayerSuggestions(selector, resetOffset)
+    popup:ClearAllPoints()
+    local bottom = selector:GetBottom()
+    if bottom and bottom < popup:GetHeight() + 20 then
+        popup:SetPoint("BOTTOMLEFT", selector, "TOPLEFT", 0, 2)
+    else
+        popup:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
+    end
+    popup:Show()
+end
+
+function UI:GetBitePlayerSuggestionsPopup()
+    if self.bitePlayerSuggestionsPopup then
+        return self.bitePlayerSuggestionsPopup
+    end
+
+    local popup = CreateFrame("Frame", NextName("BitePlayerSuggestions"), UIParent)
+    self.bitePlayerSuggestionsPopup = popup
+    popup:SetWidth(220)
+    popup:SetHeight((BITE_SUGGESTION_ROWS * 22) + 29)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetFrameLevel(121)
+    popup:SetClampedToScreen(true)
+    popup:EnableMouse(true)
+    popup:EnableMouseWheel(true)
+    SetBackdrop(popup, { 0.035, 0.035, 0.055, 0.99 }, COLORS.border)
+    popup:Hide()
+
+    popup.suggestionButtons = {}
+    for rowIndex = 1, BITE_SUGGESTION_ROWS do
+        local button = CreateFrame("Button", NextName("BitePlayerSuggestion"), popup)
+        button:SetHeight(22)
+        button:SetPoint("TOPLEFT", popup, "TOPLEFT", 5, -5 - ((rowIndex - 1) * 22))
+        button:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -5, -5 - ((rowIndex - 1) * 22))
+        button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetWidth(16)
+        button.icon:SetHeight(16)
+        button.icon:SetPoint("LEFT", button, "LEFT", 3, 0)
+        button.label = CreateText(button, "GameFontHighlightSmall", "", "LEFT", button.icon, "RIGHT", 5, 0)
+        button.label:SetWidth(135)
+        button.label:SetJustifyH("LEFT")
+        button.slotLabel = CreateText(button, "GameFontDisableSmall", "", "RIGHT", button, "RIGHT", -4, 0)
+        button.slotLabel:SetWidth(45)
+        button.slotLabel:SetJustifyH("RIGHT")
+        button:SetScript("OnMouseDown", function(self)
+            local selector = popup.ownerSelector
+            if selector and self.candidate then
+                selector.callback(self.candidate.slot)
+                selector.editBox:ClearFocus()
+                UI:SetBitePlayerSelectorValue(selector, selector.value)
+                popup:Hide()
+            end
+        end)
+        popup.suggestionButtons[rowIndex] = button
+    end
+
+    popup.footer = CreateText(popup, "GameFontDisableSmall", "", "BOTTOMLEFT", popup, "BOTTOMLEFT", 8, 6)
+    popup.footer:SetWidth(204)
+    popup.footer:SetJustifyH("LEFT")
+    popup:SetScript("OnMouseWheel", function(_, delta)
+        local selector = popup.ownerSelector
+        if not selector then
+            return
+        end
+        selector.offset = selector.offset - delta
+        UI:UpdateBitePlayerSuggestions(selector, false)
+    end)
+
+    return popup
+end
+
+local function CreateBitePlayerSelector(parent, width, callback, slotFilter, lockedValue)
+    local selector = CreateFrame("Frame", NextName("BitePlayerSelector"), parent)
+    local selectorWidth = width or 220
+    selector:SetWidth(selectorWidth)
+    selector:SetHeight(20)
+    selector.callback = callback
+    selector.slotFilter = slotFilter
+    selector.offset = 1
+    selector.search = ""
+    selector.locked = lockedValue and true or false
+
+    selector.editBox = CreateInput(selector, selectorWidth, 20)
+    selector.editBox:SetPoint("LEFT", selector, "LEFT", 0, 0)
+
+    selector.arrow = CreateFrame("Button", NextName("BitePlayerArrow"), selector, "UIPanelButtonTemplate")
+    selector.arrow:SetWidth(20)
+    selector.arrow:SetHeight(20)
+    selector.arrow:SetPoint("RIGHT", selector, "RIGHT", 0, 0)
+    selector.arrow:SetText("v")
+
+    local popup = UI:GetBitePlayerSuggestionsPopup()
+    selector.popup = popup
+    selector.suggestionButtons = popup.suggestionButtons
+    selector.footer = popup.footer
+
+    if selector.locked then
+        selector.arrow:Hide()
+        selector.editBox:SetWidth(selectorWidth)
+        selector.editBox:EnableMouse(false)
+        if selector.editBox.EnableKeyboard then
+            selector.editBox:EnableKeyboard(false)
+        end
+    else
+        selector.editBox:SetWidth(selectorWidth - 22)
+        selector.arrow:SetScript("OnClick", function()
+            selector.search = ""
+            selector.editBox:SetFocus()
+            selector.editBox:HighlightText()
+            UI:ShowBitePlayerSuggestions(selector, true)
+        end)
+        selector.editBox:SetScript("OnEditFocusGained", function(self)
+            selector.search = ""
+            self:HighlightText()
+            UI:ShowBitePlayerSuggestions(selector, true)
+        end)
+        selector.editBox:SetScript("OnTextChanged", function(self)
+            if selector.suppressSearch or not self:HasFocus() then
+                return
+            end
+            selector.search = self:GetText()
+            UI:ShowBitePlayerSuggestions(selector, true)
+        end)
+        selector.editBox:SetScript("OnEnterPressed", function(self)
+            local candidates = UI:GetBitePlayerCandidates(selector, self:GetText())
+            local typedName = Addon:NormalizeName(self:GetText())
+            local typedSlot = string.upper(Addon:Trim(self:GetText()))
+            local selected
+            for _, candidate in ipairs(candidates) do
+                if Addon:NormalizeName(candidate.name) == typedName or string.upper(candidate.slotLabel) == typedSlot then
+                    selected = candidate
+                    break
+                end
+            end
+            selected = selected or (#candidates == 1 and candidates[1] or nil)
+            if selected then
+                selector.callback(selected.slot)
+            end
+            self:ClearFocus()
+            popup:Hide()
+            UI:SetBitePlayerSelectorValue(selector, selector.value)
+        end)
+        selector.editBox:SetScript("OnEscapePressed", function(self)
+            self:ClearFocus()
+            popup:Hide()
+            UI:SetBitePlayerSelectorValue(selector, selector.value)
+        end)
+        selector.editBox:SetScript("OnEditFocusLost", function()
+            if not MouseIsOver or not MouseIsOver(popup) then
+                popup:Hide()
+                UI:SetBitePlayerSelectorValue(selector, selector.value)
+            end
+        end)
+        selector:EnableMouse(true)
+        selector:SetScript("OnMouseDown", function()
+            selector.search = ""
+            selector.editBox:SetFocus()
+            selector.editBox:HighlightText()
+            UI:ShowBitePlayerSuggestions(selector, true)
+        end)
+    end
+
+    selector:SetScript("OnHide", function()
+        if popup.ownerSelector == selector then
+            popup:Hide()
+        end
+    end)
+
+    UI:SetBitePlayerSelectorValue(selector, lockedValue or "")
     return selector
 end
 
@@ -1100,14 +1391,17 @@ function UI:CreateBitesPanel(parent)
     self.biteRows = {}
 
     CreateSectionTitle(panel, "Árbol editable de mordidas", 16, -12)
-    local help = CreateText(panel, "GameFontDisableSmall", "Elige destinos; los orígenes se calculan y bloquean automáticamente. BOSS siempre inicia el árbol.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    local help = CreateText(panel, "GameFontDisableSmall", "Escribe para buscar jugadores de la plantilla; BOSS permanece fijo y cada mordedor debe haber sido mordido antes.", "TOPLEFT", panel, "TOPLEFT", 245, -18)
+    help:SetWidth(550)
+    help:SetHeight(26)
+    help:SetJustifyH("LEFT")
     help:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
 
     CreateText(panel, "GameFontNormalSmall", "Ronda", "TOPLEFT", panel, "TOPLEFT", 18, -48)
-    CreateText(panel, "GameFontNormalSmall", "Origen", "TOPLEFT", panel, "TOPLEFT", 82, -48)
-    CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", 190, -48)
-    CreateText(panel, "GameFontNormalSmall", "Destino", "TOPLEFT", panel, "TOPLEFT", 392, -48)
-    CreateText(panel, "GameFontNormalSmall", "Personaje", "TOPLEFT", panel, "TOPLEFT", 500, -48)
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordedor", "TOPLEFT", panel, "TOPLEFT", 78, -48)
+    CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", 300, -48)
+    CreateText(panel, "GameFontNormalSmall", "Jugador mordido", "TOPLEFT", panel, "TOPLEFT", 446, -48)
+    CreateText(panel, "GameFontNormalSmall", "Puesto", "TOPLEFT", panel, "TOPLEFT", 668, -48)
 
     for index = 1, 16 do
         local y = -70 - ((index - 1) * 23)
@@ -1116,21 +1410,53 @@ function UI:CreateBitesPanel(parent)
         row.state = CreateText(panel, "GameFontHighlightSmall", "-", "TOPLEFT", panel, "TOPLEFT", 18, y)
         row.wave = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 43, y)
         row.wave:SetWidth(30)
-        local edge = Addon.db.bites[index]
-        row.source = CreateRosterSlotSelector(panel, 94, nil, edge and edge.source or "")
-        row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", 78, y + 4)
-        row.sourceName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 190, y)
-        row.sourceName:SetWidth(180)
-        row.sourceName:SetJustifyH("LEFT")
-        row.target = CreateRosterSlotSelector(panel, 94, function(slot)
+        row.source = CreateBitePlayerSelector(panel, 220, function(slot)
+            Addon:SetBiteSlot(currentIndex, "source", slot)
+        end, function(slot)
+            return Addon:IsBiteSourceAvailable(currentIndex, slot)
+        end, index == 1 and "BOSS" or nil)
+        row.source:SetPoint("TOPLEFT", panel, "TOPLEFT", 72, y + 4)
+        row.sourceSlot = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 300, y)
+        row.sourceSlot:SetWidth(52)
+        row.sourceSlot:SetJustifyH("LEFT")
+
+        row.flowLine = panel:CreateTexture(nil, "ARTWORK")
+        row.flowLine:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+        row.flowLine:SetWidth(29)
+        row.flowLine:SetHeight(2)
+        row.flowLine:SetPoint("TOPLEFT", panel, "TOPLEFT", 354, y - 5)
+
+        row.flowTail = panel:CreateTexture(nil, "ARTWORK")
+        row.flowTail:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+        row.flowTail:SetWidth(21)
+        row.flowTail:SetHeight(2)
+        row.flowTail:SetPoint("TOPLEFT", panel, "TOPLEFT", 406, y - 5)
+
+        row.flowArrow = CreateText(panel, "GameFontNormalLarge", ">", "TOPLEFT", panel, "TOPLEFT", 425, y + 4)
+        row.flowArrow:SetWidth(14)
+        row.flowArrow:SetJustifyH("LEFT")
+
+        row.biteIconFrame = CreateFrame("Frame", nil, panel)
+        row.biteIconFrame:SetWidth(22)
+        row.biteIconFrame:SetHeight(22)
+        row.biteIconFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 383, y + 5)
+        SetBackdrop(row.biteIconFrame, { 0.025, 0.025, 0.035, 1 }, COLORS.muted)
+        row.biteIcon = row.biteIconFrame:CreateTexture(nil, "OVERLAY")
+        row.biteIcon:SetTexture(BITE_ICON_TEXTURE)
+        row.biteIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        row.biteIcon:SetWidth(18)
+        row.biteIcon:SetHeight(18)
+        row.biteIcon:SetPoint("CENTER", row.biteIconFrame, "CENTER", 0, 0)
+
+        row.target = CreateBitePlayerSelector(panel, 220, function(slot)
             Addon:SetBiteSlot(currentIndex, "target", slot)
-        end, nil, function(slot)
+        end, function(slot)
             return Addon:IsBiteTargetAvailable(currentIndex, slot)
         end)
-        row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", 386, y + 4)
-        row.targetName = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 500, y)
-        row.targetName:SetWidth(190)
-        row.targetName:SetJustifyH("LEFT")
+        row.target:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, y + 4)
+        row.targetSlot = CreateText(panel, "GameFontHighlightSmall", "", "TOPLEFT", panel, "TOPLEFT", 668, y)
+        row.targetSlot:SetWidth(58)
+        row.targetSlot:SetJustifyH("LEFT")
         self.biteRows[index] = row
     end
     self:RegisterConfigurationPanel(panel)
@@ -1766,20 +2092,34 @@ function UI:RefreshBites()
         local edge = Addon.db.bites[index]
         if edge then
             row.wave:SetText(tostring(edge.wave))
-            self:SetRosterSlotSelectorValue(row.source, edge.source)
-            self:SetRosterSlotSelectorValue(row.target, edge.target)
-            row.sourceName:SetText(Addon:GetSlotName(edge.source))
-            row.targetName:SetText(Addon:GetSlotName(edge.target))
+            self:SetBitePlayerSelectorValue(row.source, edge.source)
+            self:SetBitePlayerSelectorValue(row.target, edge.target)
+            row.sourceSlot:SetText(Addon:GetSlotLabel(edge.source))
+            row.targetSlot:SetText(Addon:GetSlotLabel(edge.target))
+            local sourceColor = GetSlotRoleColor(edge.source)
+            local targetColor = GetSlotRoleColor(edge.target)
+            row.sourceSlot:SetTextColor(sourceColor[1], sourceColor[2], sourceColor[3])
+            row.targetSlot:SetTextColor(targetColor[1], targetColor[2], targetColor[3])
+
+            local stateText = "-"
+            local stateColor = COLORS.muted
+            local iconAlpha = 0.52
             if Addon.state.completed[index] then
-                row.state:SetText("OK")
-                row.state:SetTextColor(COLORS.green[1], COLORS.green[2], COLORS.green[3])
+                stateText = "OK"
+                stateColor = COLORS.green
+                iconAlpha = 1
             elseif Addon.state.active and Addon.state.currentWave == edge.wave then
-                row.state:SetText(">")
-                row.state:SetTextColor(COLORS.yellow[1], COLORS.yellow[2], COLORS.yellow[3])
-            else
-                row.state:SetText("-")
-                row.state:SetTextColor(COLORS.muted[1], COLORS.muted[2], COLORS.muted[3])
+                stateText = ">"
+                stateColor = COLORS.yellow
+                iconAlpha = 1
             end
+            row.state:SetText(stateText)
+            row.state:SetTextColor(stateColor[1], stateColor[2], stateColor[3])
+            row.flowLine:SetVertexColor(stateColor[1], stateColor[2], stateColor[3], 1)
+            row.flowTail:SetVertexColor(stateColor[1], stateColor[2], stateColor[3], 1)
+            row.flowArrow:SetTextColor(stateColor[1], stateColor[2], stateColor[3])
+            row.biteIconFrame:SetBackdropBorderColor(stateColor[1], stateColor[2], stateColor[3], 1)
+            row.biteIcon:SetAlpha(iconAlpha)
         end
     end
 end
@@ -1905,6 +2245,11 @@ function UI:RefreshConfigurationLock()
     end
     if locked then
         CloseDropDownMenus()
+        if self.bitePlayerSuggestionsPopup then
+            self.bitePlayerSuggestionsPopup:Hide()
+            self.bitePlayerSuggestionsPopup.ownerSelector = nil
+        end
+        self.activeBiteSelector = nil
     end
 
     for _, overlay in ipairs(self.configurationLockOverlays) do
@@ -1922,6 +2267,18 @@ function UI:RefreshConfigurationLock()
         row.name.editBox:EnableMouse(not locked)
         if row.name.editBox.EnableKeyboard then
             row.name.editBox:EnableKeyboard(not locked)
+        end
+    end
+    for _, row in ipairs(self.biteRows or {}) do
+        for _, selector in ipairs({ row.source, row.target }) do
+            if locked then
+                selector.editBox:ClearFocus()
+            end
+            local enabled = not locked and not selector.locked
+            selector.editBox:EnableMouse(enabled)
+            if selector.editBox.EnableKeyboard then
+                selector.editBox:EnableKeyboard(enabled)
+            end
         end
     end
     for _, input in pairs(self.zoneInputs or {}) do
@@ -1947,9 +2304,22 @@ function UI:RefreshFromSync()
         self.guildSuggestionsPopup.ownerSelector = nil
     end
     self.activeGuildSelector = nil
+    if self.bitePlayerSuggestionsPopup then
+        self.bitePlayerSuggestionsPopup:Hide()
+        self.bitePlayerSuggestionsPopup.ownerSelector = nil
+    end
+    self.activeBiteSelector = nil
     for _, row in pairs(self.rosterRows or {}) do
         if row.name and row.name.editBox then
             row.name.editBox:ClearFocus()
+        end
+    end
+    for _, row in ipairs(self.biteRows or {}) do
+        if row.source and row.source.editBox then
+            row.source.editBox:ClearFocus()
+        end
+        if row.target and row.target.editBox then
+            row.target.editBox:ClearFocus()
         end
     end
     for _, input in pairs(self.zoneInputs or {}) do

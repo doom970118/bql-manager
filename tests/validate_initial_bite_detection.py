@@ -9,8 +9,8 @@ TOC = (ADDON_ROOT / "BQLManager.toc").read_text(encoding="utf-8")
 
 
 def main() -> None:
-    assert 'Addon.VERSION = "1.15.6"' in DEFAULTS
-    assert "## Version: 1.15.6" in TOC
+    assert 'Addon.VERSION = "1.16.0"' in DEFAULTS
+    assert "## Version: 1.16.0" in TOC
     assert "initialBiteDetected = false" in CORE
 
     detection = CORE.split("function Addon:DetectInitialBossBite", 1)[1].split(

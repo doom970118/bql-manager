@@ -24,8 +24,20 @@ def rebuild_sources(edges):
     infected = []
     for wave in range(1, 6):
         wave_edges = [edge for edge in edges if edge["wave"] == wave]
-        for position, edge in enumerate(wave_edges):
-            edge["source"] = "BOSS" if wave == 1 else infected[position]
+        if wave == 1:
+            for edge in wave_edges:
+                edge["source"] = "BOSS"
+        else:
+            used = set()
+            for edge in wave_edges:
+                if edge["source"] in infected and edge["source"] not in used:
+                    used.add(edge["source"])
+                else:
+                    edge["source"] = ""
+            for edge in wave_edges:
+                if not edge["source"]:
+                    edge["source"] = next(source for source in infected if source not in used)
+                    used.add(edge["source"])
         for edge in wave_edges:
             if edge["target"] not in infected:
                 infected.append(edge["target"])
@@ -42,11 +54,39 @@ def set_target(edges, index, target):
         return False
 
     old_target = selected["target"]
+    swapped_target = False
     for other_index, other in enumerate(edges):
         if other_index != index and other["target"] == target:
             other["target"] = old_target
+            swapped_target = True
             break
     selected["target"] = target
+    for edge in edges:
+        if edge["source"] == old_target:
+            edge["source"] = target
+        elif swapped_target and edge["source"] == target:
+            edge["source"] = old_target
+    rebuild_sources(edges)
+    return True
+
+
+def set_source(edges, index, source):
+    selected = edges[index]
+    if selected["wave"] == 1:
+        return False
+    infected = {
+        edge["target"]
+        for edge in edges
+        if edge["wave"] < selected["wave"]
+    }
+    if source not in infected:
+        return False
+    old_source = selected["source"]
+    for other_index, other in enumerate(edges):
+        if other_index != index and other["wave"] == selected["wave"] and other["source"] == source:
+            other["source"] = old_source
+            break
+    selected["source"] = source
     rebuild_sources(edges)
     return True
 
@@ -69,26 +109,36 @@ def main() -> None:
     assert edges[1]["source"] == "RDPS2"
     assert edges[2]["source"] == "RDPS2"
     assert edges[3]["source"] == "RDPS1"
+    assert set_source(edges, 2, "RDPS1")
+    assert edges[2]["source"] == "RDPS1"
+    assert edges[3]["source"] == "RDPS2"
+    assert not set_source(edges, 0, "RDPS1")
     assert not set_target(edges, 3, "RDPS2")
     assert len({edge["target"] for edge in edges}) == 16
 
     for snippet in (
         "function Addon:RebuildBiteSources",
         'item.edge.source = "BOSS"',
-        'item.edge.source = infectedOrder[position] or ""',
+        "usedSources[source]",
+        "function Addon:IsBiteSourceAvailable",
+        "function Addon:SetBiteSource",
+        "otherEdge.source = oldSource",
         "function Addon:IsBiteTargetAvailable",
         "otherWave < selectedWave",
         "function Addon:SetBiteTarget",
         "otherEdge.target = oldTarget",
+        "otherEdge.source = slot",
         "self:RebuildBiteSources()",
     ):
         assert snippet in CORE
 
-    assert 'row.source = CreateRosterSlotSelector(panel, 94, nil, edge and edge.source or "")' in UI
+    assert "row.source = CreateBitePlayerSelector" in UI
+    assert 'Addon:SetBiteSlot(currentIndex, "source", slot)' in UI
+    assert "Addon:IsBiteSourceAvailable(currentIndex, slot)" in UI
     assert "Addon:IsBiteTargetAvailable(currentIndex, slot)" in UI
-    assert "self:SetRosterSlotSelectorValue(row.source, edge.source)" in UI
+    assert "self:SetBitePlayerSelectorValue(row.source, edge.source)" in UI
 
-    print("Bite target uniqueness, swaps, and automatic source rebuilding passed.")
+    print("Bite target uniqueness, searchable source swaps, and safe rebuilding passed.")
 
 
 if __name__ == "__main__":
