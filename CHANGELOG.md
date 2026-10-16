@@ -10,6 +10,18 @@ Para preparar un release en GitHub, copia la sección de la versión correspondi
 
 - Ningún cambio todavía.
 
+## [1.16.0] - 2026-10-15
+
+### Cambiado
+
+- Los selectores del árbol de mordidas muestran el nombre del jugador antes que el puesto y aprovechan más ancho para nombres largos.
+- Los selectores de mordedor y mordido permiten escribir para autocompletar jugadores de la plantilla; BOSS sigue fijo y los mordedores disponibles respetan el orden de infección.
+- Cada asignación presenta una flecha segmentada de mordedor a objetivo con el icono enmarcado de Mordedura vampírica; el flujo cambia de color según esté pendiente, activo o completado.
+
+### Corregido
+
+- Eliminado el compartimento vacío que aparecía entre el nombre y la flecha de los nuevos selectores; el campo bloqueado de BQL utiliza ahora todo el ancho.
+
 ## [1.15.6] - 2026-10-13
 
 ### Añadido

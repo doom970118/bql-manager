@@ -11,7 +11,7 @@ Consulta [CHANGELOG.md](CHANGELOG.md) para ver las novedades de cada versión y 
 - Selector con iconos para las 30 especializaciones de WotLK, filtradas según el puesto TANK, MDPS, RDPS o HEALER.
 - Composición flexible con controles para quitar y añadir funciones, exactamente dos tanques y mínimo un healer.
 - Árbol de mordidas de cinco rondas con nombres resueltos desde la plantilla.
-- Destinos seleccionables sin repeticiones y orígenes autocompletados según el orden de infección; BOSS permanece fijo al inicio.
+- Mordedores y destinos buscables por nombre, sin repeticiones y limitados por el orden de infección; BOSS permanece fijo al inicio.
 - Detección de la primera mordida real del boss para adaptar el árbol y los calls si eligió a un jugador distinto del planeado.
 - Seguimiento de mordidas mediante el registro de combate.
 - Avisos por banda y susurros al jugador que debe morder.
@@ -65,7 +65,7 @@ El botón `Verificar specs` inicia la única inspección de talentos del addon. 
 
 `Limpiar plantilla` pide confirmación y elimina todos los jugadores y specs sin cambiar la cantidad ni el tipo de puestos. Los puestos vuelven a mostrarse como `TANK1`, `MDPS1`, `RDPS1` o `HEALER1` con su icono general de rol. Las mordidas y posiciones se conservan, mientras los cooldowns que ya no tienen jugador pasan a `Sin asignar`.
 
-En `Mordidas` solo se editan los destinos. Cuando cambias un destino, los orígenes de las rondas siguientes se recalculan automáticamente. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
+En `Mordidas` cada selector muestra primero el nombre del jugador y deja su puesto al lado como referencia. Puedes escribir parte del nombre para filtrar los jugadores de la plantilla. `BOSS` permanece bloqueado; desde la segunda ronda, el selector de mordedor solo ofrece jugadores mordidos anteriormente y, si uno ya ocupa otra fila de esa ronda, ambos mordedores se intercambian. Una flecha segmentada con el icono enmarcado de Mordedura vampírica representa el flujo hacia el objetivo. Un puesto mordido en una ronda anterior deja de aparecer como destino; si eliges uno que estaba asignado en la misma ronda o en una posterior, el addon intercambia ambos destinos para conservar el árbol sin duplicados.
 
 Durante el encuentro, el addon compara la primera mordida real de Lana'thel con el plan. Si reconoce al jugador en la plantilla, mueve temporalmente su puesto al primer destino, intercambia la asignación anterior y reconstruye el árbol antes del siguiente call. Al terminar el combate, matar a Lana'thel o pulsar `Detener`, restaura el orden que estaba planificado antes del intento. Si no encuentra el nombre, muestra una alerta local y conserva la configuración para evitar cambios ambiguos.
 

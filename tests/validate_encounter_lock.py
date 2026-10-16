@@ -36,6 +36,7 @@ def main() -> None:
         "AddRosterRole",
         "RemoveRosterRole",
         "SetBiteSlot",
+        "SetBiteSource",
         "ImportRaidRoster",
         "ResetEncounter",
         "SetWave",
